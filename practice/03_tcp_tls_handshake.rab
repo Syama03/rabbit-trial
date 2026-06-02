@@ -1,0 +1,169 @@
+function fst:1
+function snd:1
+equation fst ((x, y)) = x
+equation snd ((x, y)) = y
+
+function plus:2
+function minus:2
+equation minus(plus(x, y), y) = x
+
+function succ:1
+
+(* 1. 公開鍵暗号 *)
+function pk:1        (* 秘密鍵から公開鍵を生成 *)
+function aenc:2      (* Asymmetric Encrypt *)
+function adec:2      (* Asymmetric Decrypt *)
+equation adec(aenc(m, pk(sk)), sk) = m
+
+(* 2. 共通鍵暗号 *)
+function senc:2      (* Symmetric Encrypt *)
+function sdec:2      (* Symmetric Decrypt *)
+equation sdec(senc(m, k), k) = m
+
+syscall send(c, v) {
+    put [c::store(v)]
+}
+
+syscall recv(c) {
+    case
+    | [c::store(v)] -> v
+    end
+}
+
+type node_t : process
+type chan_t : channel
+
+
+attack eaves_channel on send (c, v) {
+    put [c::store(v), ::Out(v)]
+}
+
+attack tamper_channel on recv (c) {
+    case
+    | [c::store(j), ::In(w)] -> w
+    end
+}
+
+allow node_t chan_t [send, recv]
+allow attack node_t [tamper_channel, eaves_channel]
+
+process client(ch : chan_t) : node_t 
+{
+    main {
+        new seq_c in
+        event [::Client_Syn(seq_c)];
+        (* 1. TCP SYN *)
+        _ := send(ch, ("SYN", seq_c));
+
+        var pkt1 = recv(ch) in 
+        case
+        | [pkt1 = ("SYN_ACK", seq_synack, ack_synack, pk_s)] -> 
+            case 
+            | [succ(seq_c) = ack_synack] ->
+                (* セッション鍵を生成し、サーバーの公開鍵(pk_s)で暗号化して送る *)
+                new session_key in
+                event [::Client_Est()];
+                _ := send(ch, ("ACK_CKE", ack_synack, succ(seq_synack), aenc(session_key, pk_s)));
+
+                (* データ転送: TLS Record Layer (セッション鍵で暗号化) *)
+                new msg in
+                new msg_size in
+                event [::Secret(msg)];
+
+                event [::Client_Send(msg, msg_size)];
+                _ := send(ch, ("DATA", ack_synack, succ(seq_synack), senc((msg, msg_size), session_key)));
+
+                var pkt2 = recv(ch) in
+                case
+                | [pkt2 = ("DATA_ACK", seq_dataack, ack_dataack, msg_ack, msg_rtn)] ->
+                    event [::Client_Test()];
+                    case
+                    | [plus(ack_synack, msg_size) = ack_dataack] ->
+                        case
+                        | [sdec(msg_ack, session_key) = "OK"] ->
+                            (* コネクション切断 *)
+                            event [::Client_Fin()];
+                            _ := send(ch, ("FIN", ack_dataack, succ(seq_dataack)));
+
+                            var pkt3 = recv(ch) in 
+                            case
+                            | [pkt3 = ("FIN_ACK", seq_finack, ack_finack)] -> 
+                                case
+                                | [succ(ack_dataack) = ack_finack] ->
+                                    _ := send(ch, ("ACK_FIN", ack_finack, succ(seq_finack)));
+                                    event [::Client_Closed()]
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    }
+}
+
+process server(ch : chan_t) : node_t 
+{
+    main {
+        new sk_s in (* サーバーの秘密鍵 *)
+        var pkt_syn = recv(ch) in
+        case
+        | [pkt_syn = ("SYN", seq_c)] ->
+            new seq_s in
+            (* TLS ServerHello: 自身の公開鍵 pk(sk_s) を付与して返す *)
+            _ := send(ch, ("SYN_ACK", seq_s, succ(seq_c), pk(sk_s)));
+            
+            var pkt_ack = recv(ch) in
+            case
+            | [pkt_ack = ("ACK_CKE", seq_ackcke, ack_ackcke, skey)] ->
+                var session_key = adec(skey, sk_s) in 
+                event [::Server_Est()];
+
+                var pkt_data = recv(ch) in
+                case
+                (* 確立した session_key でデータが復号できるかを検証 *)
+                | [pkt_data = ("DATA", seq_data, ack_data, msg_enc)] ->
+                    case
+                    | [succ(seq_s) = ack_data] ->
+                        var msg_msgsize = sdec(msg_enc, session_key) in 
+                        var msg = fst(msg_msgsize) in 
+                        var msg_size = snd(msg_msgsize) in
+                        event [::Server_Recv(msg, msg_size)];
+                        _ := send(ch, ("DATA_ACK", ack_data, plus(seq_data, msg_size), senc("OK", session_key), msg));
+
+                        (* コネクション切断 *)
+                        var pkt_fin = recv(ch) in 
+                        case
+                        | [pkt_fin = ("FIN", seq_fin, ack_fin)] -> 
+                            case
+                            | [succ(ack_data) = ack_fin] ->
+                                _ := send(ch, ("FIN_ACK", ack_fin, succ(seq_fin)));
+                                
+                                var pkt_fin_ack = recv(ch) in 
+                                case
+                                | [pkt_fin_ack = ("ACK_FIN", seq_finack_s, ack_finack_s)] ->
+                                    case
+                                    | [succ(ack_fin) = ack_finack_s] ->
+                                        event [::Server_Closed()]
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    }
+}
+
+channel net : chan_t
+
+system
+  client(net) | server(net)
+requires
+[
+  lemma Client_Can_Close : reachable ::Client_Closed() ;    (* verified *)
+  lemma Server_Can_Close : reachable ::Server_Closed() ;    (* verified *)
+  lemma Data_Authenticity : corresponds ::Server_Recv(msg, msg_size) ~> ::Client_Send(msg, msg_size);   (* verified? *)
+  lemma Message_Secrecy : all-traces "All m #i. Secret(m) @ i ==> not (Ex #j. K(m) @ j)"    (* verified? *)
+]

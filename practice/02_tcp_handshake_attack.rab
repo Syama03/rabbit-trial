@@ -1,0 +1,123 @@
+type node_t : process
+type chan_t : channel
+
+function fst:1
+function snd:1
+equation fst ((x, y)) = x
+equation snd ((x, y)) = y
+
+function plus:2
+function minus:2
+equation minus(plus(x, y), y) = x
+
+function succ:1
+
+syscall send(c, v) {
+    put [c::store(v)]
+}
+
+syscall recv(c) {
+    case
+    | [c::store(v)] → v
+    end
+}
+
+attack tamper_data on recv(c) {
+    new fake_msg in
+    case
+    | [c::store(("DATA", seq_c, seq_s, (msg, msg_size)))] ->
+        ("DATA", seq_c, seq_s, (fake_msg, msg_size))
+    end
+}
+
+allow node_t chan_t [send, recv]
+allow attack node_t [tamper_data]
+
+process client(ch : chan_t) : node_t 
+{
+    main {
+        new seq_c in
+        event [::Client_Syn(seq_c)];
+        _ := send(ch, ("SYN", seq_c));
+
+        var pkt1 = recv(ch) in 
+        case
+        | [pkt1 = ("SYN_ACK", seq_s, succ(seq_c))] -> 
+            event [::Client_Est()];
+            _ := send(ch, ("ACK", succ(seq_c), succ(seq_s)));
+
+            new msg in
+            new msg_size in 
+            event [::Client_Send(msg, msg_size)];
+            _ := send(ch, ("DATA", succ(seq_c), succ(seq_s), (msg, msg_size)));
+
+            var pkt2 = recv(ch) in
+            case
+            | [pkt2 = ("DATA_ACK", succ(seq_s), plus(succ(seq_c), msg_size))] ->
+
+                event [::Client_Fin()];
+                _ := send(ch, ("FIN", plus(succ(seq_c), msg_size), succ(succ(seq_s))));
+
+                var pkt3 = recv(ch) in 
+                case
+                | [pkt3 = ("FIN_ACK", succ(succ(seq_s)), succ(plus(succ(seq_c), msg_size)))] -> 
+                    _ := send(ch, ("ACK_FIN", succ(plus(succ(seq_c), msg_size)), succ(succ(succ(seq_s)))));
+                    event [::Client_Closed()]
+                end
+            end
+        end
+    }
+}
+
+process server(ch : chan_t) : node_t 
+{
+    main {
+        var pkt_syn = recv(ch) in
+        case
+        | [pkt_syn = ("SYN", seq_c)] ->
+            new seq_s in
+            _ := send(ch, ("SYN_ACK", seq_s, succ(seq_c)));
+            
+            var pkt_ack = recv(ch) in
+            case
+            | [pkt_ack = ("ACK", succ(seq_c), succ(seq_s))] ->
+                event [::Server_Est()];
+
+                var pkt_data = recv(ch) in
+                case
+                | [pkt_data = ("DATA", succ(seq_c), succ(seq_s), (msg, msg_size))] ->
+                    event [::Server_Recv(msg, msg_size)];
+                    _ := send(ch, ("DATA_ACK", succ(seq_s), plus(succ(seq_c), msg_size)));
+
+                    var pkt_fin = recv(ch) in 
+                    case
+                    | [pkt_fin = ("FIN", plus(succ(seq_c), msg_size), succ(succ(seq_s)))] -> 
+                        _ := send(ch, ("FIN_ACK", succ(succ(seq_s)), succ(plus(succ(seq_c), msg_size))));
+                        
+                        var pkt_fin_ack = recv(ch) in 
+                        case
+                        | [pkt_fin_ack = ("ACK_FIN", succ(plus(succ(seq_c), msg_size)), succ(succ(succ(seq_s))))] ->
+                            event [::Server_Closed()]
+                        end
+                    end
+                end
+            end
+        end
+    }
+}
+
+channel net : chan_t
+
+system
+  client(net) | server(net)
+requires
+[
+  lemma Client_Can_Close : (* verified *)
+    reachable ::Client_Closed() ;
+
+  lemma Server_Can_Close : (* verified *)
+    reachable ::Server_Closed() ;
+
+  lemma Data_Authenticity : (* falsified *)
+    corresponds ::Server_Recv(msg, msg_size) ~> ::Client_Send(msg, msg_size)
+]

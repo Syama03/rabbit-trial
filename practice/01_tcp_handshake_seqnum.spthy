@@ -1,0 +1,235 @@
+theory rabbit
+begin
+builtins: natural-numbers
+
+//// Signature
+
+functions: fst/1, snd/1, plus/2, minus/2, succ/1
+equations: fst(<x__2, y__3>)=x__2, snd(<x__4, y__5>)=y__5, minus(plus(x__6, y__7), y__7)=x__6
+
+//// Constants
+
+
+//// Proc group initialization
+
+// Proc group initialization PG_client__33
+rule Init_PG_client__33[role="PG_client__33"]
+  : [  ]
+    --[ Init(<'Proc_group', 'PG_client__33'>) ]->
+    [ !Inited_proc_group('PG_client__33'),
+      State_client__32_0_0(%1, '()') ]
+
+// Proc group initialization PG_server__35
+rule Init_PG_server__35[role="PG_server__35"]
+  : [  ]
+    --[ Init(<'Proc_group', 'PG_server__35'>) ]->
+    [ !Inited_proc_group('PG_server__35'),
+      State_server__34_0_0(%1, '()') ]
+
+
+//// Access control
+
+// Access control for proc client__32 of group PG_client__33
+rule Access_client__32[role="client__32"]
+  : [ !Inited_proc_group('PG_client__33') ]
+    --[ Init(<'Proc_access', 'client__32'>) ]->
+    [ !ACP('client__32', 'chan:net', 'send'),
+      !ACP('client__32', 'chan:net', 'recv') ]
+
+// Access control for proc server__34 of group PG_server__35
+rule Access_server__34[role="server__34"]
+  : [ !Inited_proc_group('PG_server__35') ]
+    --[ Init(<'Proc_access', 'server__34'>) ]->
+    [ !ACP('server__34', 'chan:net', 'send'),
+      !ACP('server__34', 'chan:net', 'recv') ]
+
+//// Proc models
+
+// Model of proc client__32
+
+// Edge client__32/new_intro_event___277 : rho__36 <- (); new c__8 = net; new v__9 = ("SYN", seq_c__13); new seq_c__13
+rule new_intro_event___277[role="client__32"]
+  : [ Fr(seq_c__13),
+      State_client__32_0_0(%v, rho__36) ]
+    --[ Client_Syn(seq_c__13),
+        Transition('client__32', 'index:0.0', %v) ]->
+    [ State_client__32_0_2_0_0(%v, '()', 'chan:net', <'str:SYN', seq_c__13>, seq_c__13) ]
+
+// Edge client__32/put_send_app_out__280 : rho__42 <- (); new c__10 = net; drop c__8; drop v__9
+rule put_send_app_out__280[role="client__32"]
+  : [ !ACP('client__32', c__8, 'send'),
+      State_client__32_0_2_0_0(%v, rho__42, c__8, v__9, seq_c__13) ]
+    --[ Transition('client__32', 'index:0.2_0.0', %v) ]->
+    [ State_client__32_0_4_0_0(%v, '()', 'chan:net', seq_c__13),
+      Store(c__8, v__9) ]
+
+// Edge client__32/case_in_return_c__287 : rho__50 <- (); new c__8 = net; new v__9 = ("ACK", succ(seq_c__13), succ(seq_s__15)); new seq_s__15; new pkt1__14 = v__11; drop c__10
+rule case_in_return_c__287[role="client__32"]
+  : [ !ACP('client__32', c__10, 'recv'),
+      State_client__32_0_4_0_0(%v, rho__50, c__10, seq_c__13),
+      Store(c__10, v__11) ]
+    --[ Client_Est(),
+        Eq(v__11, <'str:SYN_ACK', seq_s__15, succ(seq_c__13)>),
+        Transition('client__32', 'index:0.4_0.0', %v) ]->
+    [ State_client__32_0_6_0_1_0_0(%v, '()', 'chan:net', <'str:ACK', succ(seq_c__13), succ(seq_s__15)>, seq_s__15, v__11, seq_c__13) ]
+
+// Edge client__32/put_send_app_out__291 : rho__66 <- (); new msg_size__17; new msg__16; drop c__8; drop v__9
+rule put_send_app_out__291[role="client__32"]
+  : [ !ACP('client__32', c__8, 'send'),
+      Fr(msg__16),
+      Fr(msg_size__17),
+      State_client__32_0_6_0_1_0_0(%v, rho__66, c__8, v__9, seq_s__15, pkt1__14, seq_c__13) ]
+    --[ Transition('client__32', 'index:0.6_0.1_0.0', %v) ]->
+    [ State_client__32_0_6_0_5(%v, '()', msg_size__17, msg__16, seq_s__15, pkt1__14, seq_c__13),
+      Store(c__8, v__9) ]
+
+// Edge client__32/event_send_app_i__292 : rho__76 <- (); new c__8 = net; new v__9 = ("DATA", succ(seq_c__13), succ(seq_s__15), (msg__16, msg_size__17))
+rule event_send_app_i__292[role="client__32"]
+  : [ State_client__32_0_6_0_5(%v, rho__76, msg_size__17, msg__16, seq_s__15, pkt1__14, seq_c__13) ]
+    --[ Client_Send(msg__16, msg_size__17),
+        Transition('client__32', 'index:0.6_0.5', %v) ]->
+    [ State_client__32_0_6_0_6_0_0(%v, '()', 'chan:net', <'str:DATA', succ(seq_c__13), succ(seq_s__15), <msg__16, msg_size__17>>, msg_size__17, msg__16, seq_s__15, pkt1__14, seq_c__13) ]
+
+// Edge client__32/put_send_app_out__295 : rho__80 <- (); new c__10 = net; drop c__8; drop v__9
+rule put_send_app_out__295[role="client__32"]
+  : [ !ACP('client__32', c__8, 'send'),
+      State_client__32_0_6_0_6_0_0(%v, rho__80, c__8, v__9, msg_size__17, msg__16, seq_s__15, pkt1__14, seq_c__13) ]
+    --[ Transition('client__32', 'index:0.6_0.6_0.0', %v) ]->
+    [ State_client__32_0_6_0_8_0_0(%v, '()', 'chan:net', msg_size__17, msg__16, seq_s__15, pkt1__14, seq_c__13),
+      Store(c__8, v__9) ]
+
+// Edge client__32/case_in_return_c__302 : rho__88 <- (); new c__8 = net; new v__9 = ("FIN", plus(succ(seq_c__13), msg_size__17), succ(succ(seq_s__15))); new pkt2__18 = v__11; drop c__10
+rule case_in_return_c__302[role="client__32"]
+  : [ !ACP('client__32', c__10, 'recv'),
+      State_client__32_0_6_0_8_0_0(%v, rho__88, c__10, msg_size__17, msg__16, seq_s__15, pkt1__14, seq_c__13),
+      Store(c__10, v__11) ]
+    --[ Client_Fin(),
+        Eq(v__11, <'str:DATA_ACK', succ(seq_s__15), plus(succ(seq_c__13), msg_size__17)>),
+        Transition('client__32', 'index:0.6_0.8_0.0', %v) ]->
+    [ State_client__32_0_6_0_10_0_1_0_0(%v, '()', 'chan:net', <'str:FIN', plus(succ(seq_c__13), msg_size__17), succ(succ(seq_s__15))>, v__11, msg_size__17, msg__16, seq_s__15, pkt1__14, seq_c__13) ]
+
+// Edge client__32/put_send_app_out__305 : rho__104 <- (); new c__10 = net; drop c__8; drop v__9
+rule put_send_app_out__305[role="client__32"]
+  : [ !ACP('client__32', c__8, 'send'),
+      State_client__32_0_6_0_10_0_1_0_0(%v, rho__104, c__8, v__9, pkt2__18, msg_size__17, msg__16, seq_s__15, pkt1__14, seq_c__13) ]
+    --[ Transition('client__32', 'index:0.6_0.10_0.1_0.0', %v) ]->
+    [ State_client__32_0_6_0_10_0_3_0_0(%v, '()', 'chan:net', pkt2__18, msg_size__17, msg__16, seq_s__15, pkt1__14, seq_c__13),
+      Store(c__8, v__9) ]
+
+// Edge client__32/case_in_return_c__314 : rho__112 <- (); new pkt3__19 = v__11; drop c__10
+rule case_in_return_c__314[role="client__32"]
+  : [ !ACP('client__32', c__10, 'recv'),
+      !ACP('client__32', 'chan:net', 'send'),
+      State_client__32_0_6_0_10_0_3_0_0(%v, rho__112, c__10, pkt2__18, msg_size__17, msg__16, seq_s__15, pkt1__14, seq_c__13),
+      Store(c__10, v__11) ]
+    --[ Eq(v__11, <'str:FIN_ACK', succ(succ(seq_s__15)), succ(plus(succ(seq_c__13), msg_size__17))>),
+        Transition('client__32', 'index:0.6_0.10_0.3_0.0', %v) ]->
+    [ State_client__32_0_6_0_10_0_5_0_2(%v, '()', v__11, pkt2__18, msg_size__17, msg__16, seq_s__15, pkt1__14, seq_c__13),
+      Store('chan:net', <'str:ACK_FIN', succ(plus(succ(seq_c__13), msg_size__17)), succ(succ(succ(seq_s__15)))>) ]
+
+// Edge client__32/event_case_out_l__323 : rho__132 <- (); drop seq_c__13; drop pkt1__14; drop seq_s__15; drop msg__16; drop msg_size__17; drop pkt2__18; drop pkt3__19
+rule event_case_out_l__323[role="client__32"]
+  : [ State_client__32_0_6_0_10_0_5_0_2(%v, rho__132, pkt3__19, pkt2__18, msg_size__17, msg__16, seq_s__15, pkt1__14, seq_c__13) ]
+    --[ Client_Closed(),
+        Transition('client__32', 'index:0.6_0.10_0.5_0.2', %v) ]->
+    [ State_client__32_0_9(%v, '()') ]
+
+// Model of proc server__34
+
+// Edge server__34/recv_app_in__153 : rho__152 <- (); new c__10 = net
+rule recv_app_in__153[role="server__34"]
+  : [ State_server__34_0_0(%v, rho__152) ]
+    --[ Transition('server__34', 'index:0.0', %v) ]->
+    [ State_server__34_0_0_0_0(%v, '()', 'chan:net') ]
+
+// Edge server__34/case_in_return_c__334 : rho__154 <- (); new seq_s__23; new seq_c__22; new pkt_syn__21 = v__11; c__10 <- net
+rule case_in_return_c__334[role="server__34"]
+  : [ !ACP('server__34', c__10, 'recv'),
+      !ACP('server__34', 'chan:net', 'send'),
+      Fr(seq_s__23),
+      State_server__34_0_0_0_0(%v, rho__154, c__10),
+      Store(c__10, v__11) ]
+    --[ Eq(v__11, <'str:SYN', seq_c__22>),
+        Transition('server__34', 'index:0.0_0.0', %v) ]->
+    [ State_server__34_0_2_0_3_0_0(%v, '()', 'chan:net', seq_s__23, seq_c__22, v__11),
+      Store('chan:net', <'str:SYN_ACK', seq_s__23, succ(seq_c__22)>) ]
+
+// Edge server__34/case_in_return_c__341 : rho__178 <- (); new pkt_ack__24 = v__11; c__10 <- net
+rule case_in_return_c__341[role="server__34"]
+  : [ !ACP('server__34', c__10, 'recv'),
+      State_server__34_0_2_0_3_0_0(%v, rho__178, c__10, seq_s__23, seq_c__22, pkt_syn__21),
+      Store(c__10, v__11) ]
+    --[ Eq(v__11, <'str:ACK', succ(seq_c__22), succ(seq_s__23)>),
+        Server_Est(),
+        Transition('server__34', 'index:0.2_0.3_0.0', %v) ]->
+    [ State_server__34_0_2_0_5_0_1_0_0(%v, '()', 'chan:net', v__11, seq_s__23, seq_c__22, pkt_syn__21) ]
+
+// Edge server__34/case_in_return_c__348 : rho__194 <- (); new c__8 = net; new v__9 = ("DATA_ACK", succ(seq_s__23), plus(succ(seq_c__22), msg_size__27)); new msg_size__27; new msg__26; new pkt_data__25 = v__11; drop c__10
+rule case_in_return_c__348[role="server__34"]
+  : [ !ACP('server__34', c__10, 'recv'),
+      State_server__34_0_2_0_5_0_1_0_0(%v, rho__194, c__10, pkt_ack__24, seq_s__23, seq_c__22, pkt_syn__21),
+      Store(c__10, v__11) ]
+    --[ Eq(v__11, <'str:DATA', succ(seq_c__22), succ(seq_s__23), <msg__26, msg_size__27>>),
+        Server_Recv(msg__26, msg_size__27),
+        Transition('server__34', 'index:0.2_0.5_0.1_0.0', %v) ]->
+    [ State_server__34_0_2_0_5_0_3_0_1_0_0(%v, '()', 'chan:net', <'str:DATA_ACK', succ(seq_s__23), plus(succ(seq_c__22), msg_size__27)>, msg_size__27, msg__26, v__11, pkt_ack__24, seq_s__23, seq_c__22, pkt_syn__21) ]
+
+// Edge server__34/put_send_app_out__351 : rho__210 <- (); new c__10 = net; drop c__8; drop v__9
+rule put_send_app_out__351[role="server__34"]
+  : [ !ACP('server__34', c__8, 'send'),
+      State_server__34_0_2_0_5_0_3_0_1_0_0(%v, rho__210, c__8, v__9, msg_size__27, msg__26, pkt_data__25, pkt_ack__24, seq_s__23, seq_c__22, pkt_syn__21) ]
+    --[ Transition('server__34', 'index:0.2_0.5_0.3_0.1_0.0', %v) ]->
+    [ State_server__34_0_2_0_5_0_3_0_3_0_0(%v, '()', 'chan:net', msg_size__27, msg__26, pkt_data__25, pkt_ack__24, seq_s__23, seq_c__22, pkt_syn__21),
+      Store(c__8, v__9) ]
+
+// Edge server__34/case_in_return_c__361 : rho__218 <- (); new pkt_fin__28 = v__11; c__10 <- net
+rule case_in_return_c__361[role="server__34"]
+  : [ !ACP('server__34', c__10, 'recv'),
+      !ACP('server__34', 'chan:net', 'send'),
+      State_server__34_0_2_0_5_0_3_0_3_0_0(%v, rho__218, c__10, msg_size__27, msg__26, pkt_data__25, pkt_ack__24, seq_s__23, seq_c__22, pkt_syn__21),
+      Store(c__10, v__11) ]
+    --[ Eq(v__11, <'str:FIN', plus(succ(seq_c__22), msg_size__27), succ(succ(seq_s__23))>),
+        Transition('server__34', 'index:0.2_0.5_0.3_0.3_0.0', %v) ]->
+    [ State_server__34_0_2_0_5_0_3_0_5_0_2_0_0(%v, '()', 'chan:net', v__11, msg_size__27, msg__26, pkt_data__25, pkt_ack__24, seq_s__23, seq_c__22, pkt_syn__21),
+      Store('chan:net', <'str:FIN_ACK', succ(succ(seq_s__23)), succ(plus(succ(seq_c__22), msg_size__27))>) ]
+
+// Edge server__34/case_in_return_c__378 : rho__240 <- (); drop pkt_syn__21; drop seq_c__22; drop seq_s__23; drop pkt_ack__24; drop pkt_data__25; drop msg_size__27; drop msg__26; drop pkt_fin__28; drop c__10
+rule case_in_return_c__378[role="server__34"]
+  : [ !ACP('server__34', c__10, 'recv'),
+      State_server__34_0_2_0_5_0_3_0_5_0_2_0_0(%v, rho__240, c__10, pkt_fin__28, msg_size__27, msg__26, pkt_data__25, pkt_ack__24, seq_s__23, seq_c__22, pkt_syn__21),
+      Store(c__10, v__11) ]
+    --[ Eq(v__11, <'str:ACK_FIN', succ(plus(succ(seq_c__22), msg_size__27)), succ(succ(succ(seq_s__23)))>),
+        Server_Closed(),
+        Transition('server__34', 'index:0.2_0.5_0.3_0.5_0.2_0.0', %v) ]->
+    [ State_server__34_0_4(%v, '()') ]
+
+//// Midamble
+
+restriction Init : " All x #i #j . Init(x) @ #i & Init(x) @ #j ==> #i = #j "
+restriction Equality_rule: "All x y #i. Eq(x,y) @ #i ==> x = y"
+restriction NEquality_rule: "All x #i. NEq(x,x) @ #i ==> F"
+lemma AlwaysStarts[reuse,use_induction]:
+      "All x p #i. Loop_Back(x, p) @i ==> Ex #j. Loop_In(x, p) @j & j < i"
+
+lemma AlwaysStartsWhenEnds[reuse,use_induction]:
+      "All x p #i. Loop_Out(x, p) @i ==> Ex #j. Loop_In(x, p) @j & j < i"
+
+lemma TransitionOnce[reuse,use_induction]:
+      "All x p %i #j #k . Transition(x, p, %i) @#j & Transition(x, p, %i) @#k ==> #j = #k"
+
+//// Lemmas
+
+lemma Client_Can_Close :
+  exists-trace
+    "Ex  #time_0 . Client_Closed()@#time_0 "
+
+lemma Server_Can_Close :
+  exists-trace
+    "Ex  #time_0 . Server_Closed()@#time_0 "
+
+lemma Data_Authenticity :
+  all-traces
+    "All msg__30 msg_size__31 #time_1 . Server_Recv(msg__30, msg_size__31)@#time_1 ==> Ex  #time_2 . Client_Send(msg__30, msg_size__31)@#time_2 & #time_2 < #time_1 "
+
+end
+

@@ -1,0 +1,109 @@
+type node_t : process
+type chan_t : channel
+
+function fst:1
+function snd:1
+equation fst ((x, y)) = x
+equation snd ((x, y)) = y
+
+syscall send(c, v) {
+    put [c::store(v)]
+}
+
+syscall recv(c) {
+    case
+    | [c::store(v)] → v
+    end
+}
+
+allow node_t chan_t [send, recv]
+
+process client(ch : chan_t) : node_t 
+{
+    main {
+        new seq_c in
+        event [::Client_Syn(seq_c)];
+        _ := send(ch, ("SYN", seq_c));
+
+        var pkt1 = recv(ch) in 
+        case
+        | [pkt1 = ("SYN_ACK", seq_c, seq_s)] -> 
+            event [::Client_Est(seq_c, seq_s)];
+            _ := send(ch, ("ACK", seq_s));
+
+            (* データ転送 *)
+            new msg in
+            event [::Client_Send(seq_c, msg)];
+            _ := send(ch, ("DATA", seq_c, msg));
+
+            var pkt2 = recv(ch) in
+            case
+            | [pkt2 = ("DATA_ACK", msg)] ->
+
+                event [::Client_Fin(seq_c)];
+                _ := send(ch, ("FIN", seq_c));
+
+                var pkt3 = recv(ch) in 
+                case
+                | [pkt3 = ("FIN_ACK", seq_s)] -> 
+                    _ := send(ch, ("ACK_FIN", seq_c));
+                    event [::Client_Closed(seq_c, seq_s)]
+                end
+            end
+        end
+    }
+}
+
+process server(ch : chan_t) : node_t 
+{
+    main {
+        var pkt_syn = recv(ch) in
+        case
+        | [pkt_syn = ("SYN", seq_c)] ->
+            new seq_s in
+            _ := send(ch, ("SYN_ACK", seq_c, seq_s));
+            
+            var pkt_ack = recv(ch) in
+            case
+            | [pkt_ack = ("ACK", seq_s)] ->
+                event [::Server_Est(seq_c, seq_s)];
+
+                var pkt_data = recv(ch) in
+                case
+                | [pkt_data = ("DATA", seq_c, msg)] ->
+                    event [::Server_Recv(seq_c, msg)];
+                    _ := send(ch, ("DATA_ACK", msg));
+
+                    (* コネクション切断 *)
+                    var pkt_fin = recv(ch) in 
+                    case
+                    | [pkt_fin = ("FIN", seq_c)] -> 
+                        _ := send(ch, ("FIN_ACK", seq_s));
+                        
+                        var pkt_fin_ack = recv(ch) in 
+                        case
+                        | [pkt_fin_ack = ("ACK_FIN", seq_c)] ->
+                            event [::Server_Closed(seq_c, seq_s)]
+                        end
+                    end
+                end
+            end
+        end
+    }
+}
+
+channel net : chan_t
+
+system
+  client(net) | server(net)
+requires
+[
+  lemma Client_Can_Close : (* verified *)
+    reachable ::Client_Closed(seq_c, seq_s) ;
+
+  lemma Server_Can_Close : (* verified *)
+    reachable ::Server_Closed(seq_c, seq_s) ;
+
+  lemma Data_Authenticity : (* verified *)
+    corresponds ::Server_Recv(seq_c, msg) ~> ::Client_Send(seq_c, msg)
+]

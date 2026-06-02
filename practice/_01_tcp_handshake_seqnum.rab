@@ -1,0 +1,103 @@
+type node_t : process
+type chan_t : channel
+
+(*
+function size:2
+equation size (msg, msg_size) = msg_size
+*)
+
+function plus:2
+function minus:2
+equation minus(plus(x, y), y) = x
+
+function succ:1
+
+process client(ch : chan_t) : node_t 
+{
+    main {
+        new seq_c in
+        event [::Client_Syn(seq_c)];
+        put [ch::syn(seq_c)];
+
+        case
+        | [ch::syn_ack(seq_s, succ(seq_c))] -> 
+            event [::Client_Est()];
+            put [ch::ack(succ(seq_c), succ(seq_s))];
+
+            (* データ転送 *)
+            new msg in
+            new msg_size in 
+            event [::Client_Send(msg, msg_size)];
+            put [ch::tcp_data(succ(seq_c), succ(seq_s), (msg, msg_size))];
+
+            repeat
+            | [ch::data_ack(succ(seq_s), plus(succ(seq_c), msg_size))] ->
+                event [::Client_Fin()];
+                put [ch::fin_c(plus(succ(seq_c), msg_size), succ(succ(seq_s)))];
+
+                case
+                | [ch::fin_s(succ(succ(seq_s)), succ(plus(succ(seq_c), msg_size)))] -> 
+                    put [ch::ack_fin(succ(plus(succ(seq_c), msg_size)), succ(succ(succ(seq_s))))];
+                    event [::Client_Closed()]
+                end
+            | [ch::data_ack(succ(seq_s), plus(succ(seq_c), x))] ->
+                event [::ReSend(msg)];
+                put [ch::tcp_data(succ(seq_c), succ(seq_s), (msg, msg_size))]
+            until
+            | [::Client_Fin()] -> skip
+            end
+        end
+    }
+}
+
+process server(ch : chan_t) : node_t 
+{
+    main {
+        case
+        | [ch::syn(seq_c)] ->
+            new seq_s in
+            put [ch::syn_ack(seq_s, succ(seq_c))];
+            
+            case
+            | [ch::ack(succ(seq_c), succ(seq_s))] ->
+                event [::Server_Est()];
+
+                (* データ転送 *)
+                case
+                | [ch::tcp_data(succ(seq_c), succ(seq_s), (msg, msg_size))] ->
+                    event [::Server_Recv(msg, msg_size)];
+                    put [ch::data_ack(succ(seq_s), plus(succ(seq_c), msg_size))];
+
+                    (* コネクション切断 *)
+                    case
+                    | [ch::fin_c(plus(succ(seq_c), msg_size), succ(succ(seq_s)))] -> 
+                        put [ch::fin_s(succ(succ(seq_s)), succ(plus(succ(seq_c), msg_size)))];
+                        
+                        case
+                        | [ch::ack_fin(succ(plus(succ(seq_c), msg_size)), succ(succ(succ(seq_s))))] ->
+                            event [::Server_Closed()]
+                        end
+                    end
+                end
+            end
+        end
+    }
+}
+
+allow node_t chan_t [.]
+
+channel net : chan_t
+
+system
+  client(net) | server(net)
+requires
+[
+  lemma Client_Can_Close : (* verified *)
+    reachable ::Client_Closed();
+
+  lemma Server_Can_Close : (* verified *)
+    reachable ::Server_Closed();
+
+  lemma Data_Authenticity : (* verified *)
+    corresponds ::Server_Recv(msg, msg_size) ~> ::Client_Send(msg, msg_size)
+]
