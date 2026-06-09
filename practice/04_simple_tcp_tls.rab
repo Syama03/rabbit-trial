@@ -1,0 +1,91 @@
+(* 1. 公開鍵暗号 *)
+function pk:1        (* 秘密鍵から公開鍵を生成 *)
+function aenc:2      (* Asymmetric Encrypt *)
+function adec:2      (* Asymmetric Decrypt *)
+equation adec(aenc(m, pk(sk)), sk) = m
+
+(* 2. 共通鍵暗号 *)
+function senc:2      (* Symmetric Encrypt *)
+function sdec:2      (* Symmetric Decrypt *)
+equation sdec(senc(m, k), k) = m
+
+syscall send(c, v) {
+    put [c::store(v)]
+}
+
+syscall recv(c) {
+    case
+    | [c::store(v)] -> v
+    end
+}
+
+type node_t : process
+type chan_t : channel
+
+
+attack eaves_channel on send (c, v) {
+    put [c::store(v), ::Out(v)]
+}
+
+attack tamper_channel on recv (c) {
+    case
+    | [c::store(j), ::In(w)] -> w
+    end
+}
+
+allow node_t chan_t [send, recv]
+allow attack node_t [tamper_channel, eaves_channel]
+
+process client(ch : chan_t) : node_t 
+{
+    main {
+        var pkt1 = recv(ch) in 
+        case
+        | [pkt1 = ("SYN_ACK", pk_s)] -> 
+            new session_key in
+            event [::Client_Est()];
+            _ := send(ch, ("ACK_CKE", aenc(session_key, pk_s)));
+
+            new msg in
+            event [::Secret(msg)];
+
+            event [::Client_Send(msg)];
+            _ := send(ch, ("DATA", senc(msg, session_key)))
+        end
+    }
+}
+
+process server(ch : chan_t) : node_t 
+{
+    main {
+        new sk_s in    (* SYNを受け取ったと仮定 *)
+        _ := send(ch, ("SYN_ACK", pk(sk_s)));
+        
+        var pkt_ack = recv(ch) in
+        case
+        | [pkt_ack = ("ACK_CKE", skey)] ->
+            var session_key = adec(skey, sk_s) in 
+            event [::Server_Est()];
+
+            var pkt_data = recv(ch) in
+            case
+            (* 確立した session_key でデータが復号できるかを検証 *)
+            | [pkt_data = ("DATA", msg_enc)] ->
+                var msg = sdec(msg_enc, session_key) in 
+                event [::Server_Recv(msg)]
+            end
+        end
+    }
+}
+
+channel net : chan_t
+
+system
+  client(net) | server(net)
+requires
+[
+  lemma Client_Send : reachable ::Client_Send(msg) ;    (* verified *)
+  lemma Server_Recv : reachable ::Server_Recv(msg) ;    (* verified *)
+  lemma Data_Authenticity : corresponds ::Server_Recv(msg) ~> ::Client_Send(msg);   (* falsified *)
+  lemma Message_Secrecy : all-traces "All m #i. Secret(m) @ i ==> not (Ex #j. K(m) @ j)"    (* falsified *)
+]

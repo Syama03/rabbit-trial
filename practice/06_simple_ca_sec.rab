@@ -1,0 +1,139 @@
+(* セキュアなチャネルでCAの公開鍵を入手 *)
+
+(* 1. 公開鍵暗号 *)
+function pk:1        (* 秘密鍵から公開鍵を生成 *)
+function aenc:2      (* Asymmetric Encrypt *)
+function adec:2      (* Asymmetric Decrypt *)
+equation adec(aenc(m, pk(sk)), sk) = m
+
+(* 2. 共通鍵暗号 *)
+function senc:2      (* Symmetric Encrypt *)
+function sdec:2      (* Symmetric Decrypt *)
+equation sdec(senc(m, k), k) = m
+
+(* 3. デジタル署名 *)
+function sign:2      (* 秘密鍵で署名 *)
+function checksign:2 (* 公開鍵で検証し、中身を取り出す *)
+equation checksign(sign(m, sk), pk(sk)) = m
+
+syscall send(c, v) {
+    put [c::store(v)]
+}
+syscall recv(c) {
+    case
+    | [c::store(v)] -> v
+    end
+}
+
+syscall sec_send(c, v) {
+    put [c::sec_store(v)]
+}
+syscall sec_recv(c) {
+    case
+    | [c::sec_store(v)] -> v
+    end
+}
+
+type node_t : process
+type chan_t : channel
+type sec_chan_t : channel
+
+attack eaves_channel on send (c, v) {
+    put [c::store(v), ::Out(v)]
+}
+attack tamper_channel on recv (c) {
+    case
+    | [c::store(j), ::In(w)] -> w
+    end
+}
+
+allow node_t chan_t [send, recv]
+allow node_t sec_chan_t [sec_send, sec_recv]
+allow attack node_t [tamper_channel, eaves_channel]
+
+
+(* 鍵を配布 *)
+process setup(sec_c_client : sec_chan_t, sec_c_server : sec_chan_t) : node_t 
+{
+    main {
+        new sk_ca in  (* CAの秘密鍵 *)
+        new sk_s in   (* サーバーの秘密鍵 *)
+        _ := sec_send(sec_c_client, ("INIT_C", pk(sk_ca)));
+        _ := sec_send(sec_c_server, ("INIT_S", sk_s, sign(("server.com", pk(sk_s)), sk_ca)))
+        
+    }
+}
+
+process client(ch : chan_t, sec_ch : sec_chan_t) : node_t 
+{
+    main {
+        var init_c = sec_recv(sec_ch) in
+        case
+        | [init_c = ("INIT_C", pk_ca)] ->
+            event [::Client_Test()];
+            
+            var pkt1 = recv(ch) in 
+            case
+            | [pkt1 = ("SYN_ACK", pk_s, cert)] -> 
+                
+                (* 証明書(cert)をCAの公開鍵(pk_ca)で検証し、中身の公開鍵を取り出す *)
+                var verified_cert = checksign(cert, pk_ca) in
+                case 
+                | [verified_cert = ("server.com", verified_pk_s)] ->
+                    new session_key in
+                    event [::Client_Est()];
+                    (* 検証して得られた公開鍵を使ってセッション鍵を暗号化 *)
+                    _ := send(ch, ("ACK_CKE", aenc(session_key, verified_pk_s)));
+
+                    new msg in
+                    event [::Secret(msg)];
+                    event [::Client_Send(msg)];
+                    _ := send(ch, ("DATA", senc(msg, session_key)))
+                end
+            end
+        end
+    }
+}
+
+process server(ch : chan_t, sec_ch : sec_chan_t) : node_t 
+{
+    main {
+        var init_s = sec_recv(sec_ch) in
+        case
+        | [init_s = ("INIT_S", sk_s, cert)] ->
+            
+            (* 自身の公開鍵に加えて、CAから貰った証明書も送る *)
+            _ := send(ch, ("SYN_ACK", pk(sk_s), cert));
+            event [::Server_Test()];
+            
+            var pkt_ack = recv(ch) in
+            case
+            | [pkt_ack = ("ACK_CKE", aenc(session_key, pk(sk_s)))] ->
+                event [::Server_Est()];
+
+                var pkt_data = recv(ch) in
+                case
+                | [pkt_data = ("DATA", senc(msg, session_key))] ->
+                    event [::Server_Recv(msg)]
+                end
+            end
+        end
+    }
+}
+
+channel net : chan_t
+channel sec_c : sec_chan_t
+channel sec_s : sec_chan_t
+
+system
+  setup(sec_c, sec_s) | client(net, sec_c) | server(net, sec_s)
+  
+requires
+[
+  lemma Client_Send : reachable ::Client_Send(msg) ;    (* verified *)
+  lemma Client_Test : reachable ::Client_Test() ;    (* verified *)
+  lemma Server_Recv : reachable ::Server_Recv(msg) ;     (* verified *)
+  lemma Server_Test : reachable ::Server_Test() ;     (* verified *)
+  lemma Data_Authenticity : corresponds ::Server_Recv(msg) ~> ::Client_Send(msg);   (* falsified. 攻撃者が通信して自身のデータを送ることができる = サーバーがクライアント以外からの msg を受け取る可能性がある *)
+  lemma Message_Secrecy : all-traces "All m #i. Secret(m) @ i ==> not (Ex #j. K(m) @ j)"    (* verified *)
+]

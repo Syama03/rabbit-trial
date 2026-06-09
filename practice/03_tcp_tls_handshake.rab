@@ -110,7 +110,7 @@ process server(ch : chan_t) : node_t
         case
         | [pkt_syn = ("SYN", seq_c)] ->
             new seq_s in
-            (* TLS ServerHello: 自身の公開鍵 pk(sk_s) を付与して返す *)
+            (* 自身の公開鍵 pk(sk_s) を付与して返す *)
             _ := send(ch, ("SYN_ACK", seq_s, succ(seq_c), pk(sk_s)));
             
             var pkt_ack = recv(ch) in
