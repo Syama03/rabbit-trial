@@ -1,0 +1,50 @@
+(* 終わらない *)
+
+(* DH鍵交換 *)
+function g:0
+function e:2
+equation e(e(g, x), y) = e(e(g, y), x)
+
+syscall send(c, v) {
+    put [c::store(v)]
+}
+syscall recv(c) {
+    case
+    | [c::store(v)] -> v
+    end
+}
+
+type node_t : process
+type chan_t : channel
+
+attack eaves_channel on send (c, v) {
+    put [c::store(v), ::Out(v)]
+}
+
+allow attack node_t [eaves_channel]
+allow node_t chan_t [send, recv]
+
+process dh_test(ch : chan_t) : node_t 
+{
+    main {
+        new x in
+        new y in
+        
+        (* ネットワークに公開成分 g^x と g^y を送信 *)
+        _ := send(ch, e(g, x));
+        _ := send(ch, e(g, y));
+
+        (* セッション鍵 g^(xy) を計算 *)
+        var session_key = e(e(g, x), y) in
+        
+        event [::Secret(session_key)]
+    }
+}
+
+channel net : chan_t
+system dh_test(net)
+
+requires
+[
+  lemma DH_Key_Secrecy : all-traces "All k #i. Secret(k) @ i ==> not (Ex #j. K(k) @ j)"
+]

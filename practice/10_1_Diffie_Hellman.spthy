@@ -1,0 +1,75 @@
+theory rabbit
+begin
+builtins: natural-numbers
+
+//// Signature
+
+functions: g/0, e/2
+equations: e(e(g(), x__2), y__3)=e(e(g(), y__3), x__2)
+
+//// Constants
+
+
+//// Proc group initialization
+
+// Proc group initialization PG_dh_test__13
+rule Init_PG_dh_test__13[role="PG_dh_test__13"]
+  : [  ]
+    --[ Init(<'Proc_group', 'PG_dh_test__13'>) ]->
+    [ !Inited_proc_group('PG_dh_test__13'),
+      State_dh_test__12_0_0(%1, '()') ]
+
+
+//// Access control
+
+// Access control for proc dh_test__12 of group PG_dh_test__13
+rule Access_dh_test__12[role="dh_test__12"]
+  : [ !Inited_proc_group('PG_dh_test__13') ]
+    --[ Init(<'Proc_access', 'dh_test__12'>) ]->
+    [ !ACP('dh_test__12', 'chan:net', 'send'),
+      !ACP('dh_test__12', 'chan:net', 'recv') ]
+
+//// Proc models
+
+// Model of proc dh_test__12
+
+// Edge dh_test__12/new_intro_new_in__56 : rho__14 <- (); new session_key__11 = e(e(g, x__9), y__10); new y__10; new x__9
+rule new_intro_new_in__56[role="dh_test__12"]
+  : [ !ACP('dh_test__12', 'chan:net', 'send'),
+      !ACP('dh_test__12', 'chan:net', 'send'),
+      Fr(x__9),
+      Fr(y__10),
+      State_dh_test__12_0_0(%v, rho__14) ]
+    --[ Transition('dh_test__12', 'index:0.0', %v) ]->
+    [ State_dh_test__12_0_8(%v, '()', e(e(g(), x__9), y__10), y__10, x__9),
+      Store('chan:net', e(g(), x__9)),
+      Store('chan:net', e(g(), y__10)) ]
+
+// Edge dh_test__12/event_let_exit_s__59 : rho__38 <- (); drop x__9; drop y__10; drop session_key__11
+rule event_let_exit_s__59[role="dh_test__12"]
+  : [ State_dh_test__12_0_8(%v, rho__38, session_key__11, y__10, x__9) ]
+    --[ Secret(session_key__11),
+        Transition('dh_test__12', 'index:0.8', %v) ]->
+    [ State_dh_test__12_0_12(%v, '()') ]
+
+//// Midamble
+
+restriction Init : " All x #i #j . Init(x) @ #i & Init(x) @ #j ==> #i = #j "
+restriction Equality_rule: "All x y #i. Eq(x,y) @ #i ==> x = y"
+restriction NEquality_rule: "All x #i. NEq(x,x) @ #i ==> F"
+lemma AlwaysStarts[reuse,use_induction]:
+      "All x p #i. Loop_Back(x, p) @i ==> Ex #j. Loop_In(x, p) @j & j < i"
+
+lemma AlwaysStartsWhenEnds[reuse,use_induction]:
+      "All x p #i. Loop_Out(x, p) @i ==> Ex #j. Loop_In(x, p) @j & j < i"
+
+lemma TransitionOnce[reuse,use_induction]:
+      "All x p %i #j #k . Transition(x, p, %i) @#j & Transition(x, p, %i) @#k ==> #j = #k"
+
+//// Lemmas
+
+lemma DH_Key_Secrecy :
+  all-traces "All k #i. Secret(k) @ i ==> not (Ex #j. K(k) @ j)"
+
+end
+

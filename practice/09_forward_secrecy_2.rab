@@ -1,0 +1,169 @@
+(* 計算に時間がかかりすぎる *)
+
+(* 公開鍵暗号 *)
+function pk:1        (* 秘密鍵から公開鍵を生成 *)
+function aenc:2      (* Asymmetric Encrypt *)
+function adec:2      (* Asymmetric Decrypt *)
+equation adec(aenc(m, pk(sk)), sk) = m
+
+(* 共通鍵暗号 *)
+function senc:2      (* Symmetric Encrypt *)
+function sdec:2      (* Symmetric Decrypt *)
+equation sdec(senc(m, k), k) = m
+
+(* デジタル署名 *)
+function sign:2      (* 秘密鍵で署名 *)
+function checksign:2 (* 公開鍵で検証し、中身を取り出す *)
+equation checksign(sign(m, sk), pk(sk)) = m
+
+(* Diffie-Hellman 鍵交換 *)
+function g:0         (* DHの生成元 *)
+function e:2       (* べき乗計算 *)
+equation e(e(g, x), y) = e(e(g, y), x)
+
+syscall send(c, v) {
+    put [c::store(v)]
+}
+syscall recv(c) {
+    case
+    | [c::store(v)] -> v
+    end
+}
+
+syscall sec_send(c, v) {
+    put [c::sec_store(v)]
+}
+syscall sec_recv(c) {
+    case
+    | [c::sec_store(v)] -> v
+    end
+}
+
+type node_t : process
+type chan_t : channel
+type sec_chan_t : channel
+
+attack eaves_channel on send (c, v) {
+    put [c::store(v), ::Out(v)]
+}
+attack tamper_channel on recv (c) {
+    case
+    | [c::store(j), ::In(w)] -> w
+    end
+}
+
+allow node_t chan_t [send, recv]
+allow node_t sec_chan_t [sec_send, sec_recv]
+(*
+allow attack node_t [tamper_channel, eaves_channel]
+*)
+
+(* 鍵を配布 *)
+process setup(sec_c_client : sec_chan_t, sec_c_server : sec_chan_t) : node_t 
+{
+    main {
+        new sk_ca in  (* CAの秘密鍵 *)
+        new sk_s in   (* サーバーの秘密鍵 *)
+        _ := sec_send(sec_c_client, ("INIT_C", pk(sk_ca)));
+        _ := sec_send(sec_c_server, ("INIT_S", sk_s, sign(("server.com", pk(sk_s)), sk_ca)))
+    }
+}
+
+process client(ch : chan_t, sec_ch : sec_chan_t) : node_t 
+{
+    main {
+        var init_c = sec_recv(sec_ch) in
+        case
+        | [init_c = ("INIT_C", pk_ca)] ->
+            event [::Client_Test()];
+            
+            (* サーバーからDH公開成分と、それに対する署名を受け取る *)
+            var pkt1 = recv(ch) in 
+            case
+            | [pkt1 = ("SYN_ACK", pk_s, cert, dh_s, dh_sig)] -> 
+                
+                (* 証明書をCAの公開鍵で検証し、中身の公開鍵を取り出す *)
+                var verified_cert = checksign(cert, pk_ca) in
+                case 
+                | [verified_cert = ("server.com", verified_pk_s)] ->
+                    
+                    (* サーバーのDH公開成分に対する署名を、検証されたサーバーの公開鍵で検証 *)
+                    var verified_dh = checksign(dh_sig, verified_pk_s) in
+                    case
+                    | [verified_dh = dh_s] ->
+                        
+                        (* クライアント自身の一時的なDH秘密鍵 x を生成 *)
+                        new x in
+                        (* セッション鍵 g^(yx) *)
+                        var session_key = e(dh_s, x) in
+                        
+                        event [::Client_Est()];
+                        
+                        (* 自身のDH公開成分をサーバーに送る *)
+                        _ := send(ch, ("ACK_CKE", e(g, x)));
+
+                        new msg in
+                        event [::Secret(msg)];
+                        event [::Client_Send(msg)];
+                        _ := send(ch, ("DATA", senc(msg, session_key)))
+                    end
+                end
+            end
+        end
+    }
+}
+
+process server(ch : chan_t, sec_ch : sec_chan_t) : node_t 
+{
+    main {
+        var init_s = sec_recv(sec_ch) in
+        case
+        | [init_s = ("INIT_S", sk_s, cert)] ->
+            
+            (* サーバー自身の一時的なDH秘密鍵 y を生成 *)
+            new y in
+            var dh_s = e(g, y) in
+            (* 自身のDH公開成分に対して、長期署名鍵 sk_s で署名を作成 *)
+            var dh_sig = sign(dh_s, sk_s) in
+            
+            (* 自身の公開鍵、証明書に加え、DH公開成分とその署名 を送る *)
+            _ := send(ch, ("SYN_ACK", pk(sk_s), cert, dh_s, dh_sig));
+            event [::Server_Test()];
+            
+            var pkt_ack = recv(ch) in
+            case
+            | [pkt_ack = ("ACK_CKE", dh_c)] ->
+                
+                (* セッション鍵 g^(xy) *)
+                var session_key = e(dh_c, y) in
+                
+                event [::Server_Est()];
+
+                var pkt_data = recv(ch) in
+                case
+                | [pkt_data = ("DATA", senc(msg, session_key))] ->
+                    event [::Server_Recv(msg)]
+                end
+            end
+        end
+    }
+}
+
+channel net : chan_t
+channel sec_c : sec_chan_t
+channel sec_s : sec_chan_t
+
+system
+  setup(sec_c, sec_s) | client(net, sec_c) | server(net, sec_s)
+  
+requires
+[
+  lemma Client_Send : reachable ::Client_Send(msg) ;    (* verified *)
+  lemma Client_Test : reachable ::Client_Test() ;    (* verified *)
+  lemma Server_Recv : reachable ::Server_Recv(msg) ;     (* verified *)
+  lemma Server_Test : reachable ::Server_Test() ;     (* verified *)
+  lemma Data_Authenticity : corresponds ::Server_Recv(msg) ~> ::Client_Send(msg); 
+  lemma Message_Secrecy : all-traces "All m #i. Secret(m) @ i ==> not (Ex #j. K(m) @ j)"; 
+  lemma Forward_Secrecy : all-traces "All m #i. Secret(m) @ i & (Ex #j. K(m) @ j) ==> (Ex #k. KeyCompromise() @ k & #k < #i)"
+]
+

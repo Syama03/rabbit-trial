@@ -1,0 +1,84 @@
+theory rabbit
+begin
+builtins: natural-numbers
+
+//// Signature
+
+functions: senc/2, sdec/2
+equations: sdec(senc(m__3, k__2), k__2)=m__3
+
+//// Constants
+
+
+//// Proc group initialization
+
+// Proc group initialization PG_enc_test__14
+rule Init_PG_enc_test__14[role="PG_enc_test__14"]
+  : [  ]
+    --[ Init(<'Proc_group', 'PG_enc_test__14'>) ]->
+    [ !Inited_proc_group('PG_enc_test__14'),
+      State_enc_test__13_0_0(%1, '()') ]
+
+
+//// Access control
+
+// Access control for proc enc_test__13 of group PG_enc_test__14
+rule Access_enc_test__13[role="enc_test__13"]
+  : [ !Inited_proc_group('PG_enc_test__14') ]
+    --[ Init(<'Proc_access', 'enc_test__13'>) ]->
+    [ !ACP('enc_test__13', 'chan:net', 'send'),
+      !ACP('enc_test__13', 'chan:net', 'recv') ]
+
+//// Proc models
+
+// Model of proc enc_test__13
+
+// Attack edge enc_test__13/new_intro_new_in__47 : rho__15 <- (); new msg__12; new session_key__11
+rule new_intro_new_in__47[role="enc_test__13"]
+  : [ !ACP('enc_test__13', 'chan:net', 'send'),
+      Fr(msg__12),
+      Fr(session_key__11),
+      State_enc_test__13_0_0(%v, rho__15) ]
+    --[ Transition('enc_test__13', 'index:0.0', %v) ]->
+    [ Out(senc(msg__12, session_key__11)),
+      State_enc_test__13_0_4(%v, '()', msg__12, session_key__11),
+      Store('chan:net', senc(msg__12, session_key__11)) ]
+
+// Edge enc_test__13/event_new_out_ne__49 : rho__33 <- (); drop session_key__11; drop msg__12
+rule event_new_out_ne__49[role="enc_test__13"]
+  : [ State_enc_test__13_0_4(%v, rho__33, msg__12, session_key__11) ]
+    --[ Secret(msg__12),
+        Transition('enc_test__13', 'index:0.4', %v) ]->
+    [ State_enc_test__13_0_7(%v, '()') ]
+
+// Edge enc_test__13/new_intro_new_in__43 : rho__15 <- (); new msg__12; new session_key__11
+rule new_intro_new_in__43[role="enc_test__13"]
+  : [ !ACP('enc_test__13', 'chan:net', 'send'),
+      Fr(msg__12),
+      Fr(session_key__11),
+      State_enc_test__13_0_0(%v, rho__15) ]
+    --[ Transition('enc_test__13', 'index:0.0', %v) ]->
+    [ State_enc_test__13_0_4(%v, '()', msg__12, session_key__11),
+      Store('chan:net', senc(msg__12, session_key__11)) ]
+
+//// Midamble
+
+restriction Init : " All x #i #j . Init(x) @ #i & Init(x) @ #j ==> #i = #j "
+restriction Equality_rule: "All x y #i. Eq(x,y) @ #i ==> x = y"
+restriction NEquality_rule: "All x #i. NEq(x,x) @ #i ==> F"
+lemma AlwaysStarts[reuse,use_induction]:
+      "All x p #i. Loop_Back(x, p) @i ==> Ex #j. Loop_In(x, p) @j & j < i"
+
+lemma AlwaysStartsWhenEnds[reuse,use_induction]:
+      "All x p #i. Loop_Out(x, p) @i ==> Ex #j. Loop_In(x, p) @j & j < i"
+
+lemma TransitionOnce[reuse,use_induction]:
+      "All x p %i #j #k . Transition(x, p, %i) @#j & Transition(x, p, %i) @#k ==> #j = #k"
+
+//// Lemmas
+
+lemma Message_Secrecy :
+  all-traces "All m #i. Secret(m) @ i ==> not (Ex #j. K(m) @ j)"
+
+end
+

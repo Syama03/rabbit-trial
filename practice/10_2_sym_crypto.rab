@@ -1,0 +1,43 @@
+(* 共通鍵暗号 *)
+function senc:2      (* Symmetric Encrypt *)
+function sdec:2      (* Symmetric Decrypt *)
+equation sdec(senc(m, k), k) = m
+
+syscall send(c, v) {
+    put [c::store(v)]
+}
+syscall recv(c) {
+    case
+    | [c::store(v)] -> v
+    end
+}
+
+type node_t : process
+type chan_t : channel
+
+attack eaves_channel on send (c, v) {
+    put [c::store(v), ::Out(v)]
+}
+
+allow node_t chan_t [send, recv]
+allow attack node_t [eaves_channel]
+
+process enc_test(ch : chan_t) : node_t 
+{
+    main {
+        new session_key in
+        
+        new msg in
+        
+        _ := send(ch, senc(msg, session_key));
+        event [::Secret(msg)]
+    }
+}
+
+channel net : chan_t
+system enc_test(net)
+
+requires
+[
+  lemma Message_Secrecy : all-traces "All m #i. Secret(m) @ i ==> not (Ex #j. K(m) @ j)"    (* verified *)
+]
