@@ -1,0 +1,197 @@
+theory rabbit
+begin
+builtins: natural-numbers, diffie-hellman
+
+//// Signature
+
+
+//// Constants
+
+
+//// Proc group initialization
+
+// Proc group initialization PG_client__22
+rule Init_PG_client__22[role="PG_client__22"]
+  : [  ]
+    --[ Init(<'Proc_group', 'PG_client__22'>) ]->
+    [ !Inited_proc_group('PG_client__22'),
+      State_client__21_0_0(%1, '()') ]
+
+// Proc group initialization PG_server__24
+rule Init_PG_server__24[role="PG_server__24"]
+  : [  ]
+    --[ Init(<'Proc_group', 'PG_server__24'>) ]->
+    [ !Inited_proc_group('PG_server__24'),
+      State_server__23_0_0(%1, '()') ]
+
+
+//// Access control
+
+// Access control for proc client__21 of group PG_client__22
+rule Access_client__21[role="client__21"]
+  : [ !Inited_proc_group('PG_client__22') ]
+    --[ Init(<'Proc_access', 'client__21'>) ]->
+    [ !ACP('client__21', 'chan:net', 'send'),
+      !ACP('client__21', 'chan:net', 'recv') ]
+
+// Access control for proc server__23 of group PG_server__24
+rule Access_server__23[role="server__23"]
+  : [ !Inited_proc_group('PG_server__24') ]
+    --[ Init(<'Proc_access', 'server__23'>) ]->
+    [ !ACP('server__23', 'chan:net', 'send'),
+      !ACP('server__23', 'chan:net', 'recv') ]
+
+//// Proc models
+
+// Model of proc client__21
+
+// Attack edge client__21/new_intro_eaves___144 : rho__25 <- (); new x__12
+rule new_intro_eaves___144[role="client__21"]
+  : [ !ACP('client__21', 'chan:net', 'send'),
+      Fr(x__12),
+      State_client__21_0_0(%v, rho__25) ]
+    --[ Transition('client__21', 'index:0.0', %v) ]->
+    [ Out(<'str:INIT', 'g'^x__12>),
+      State_client__21_0_3(%v, '()', x__12),
+      Store('chan:net', <'str:INIT', 'g'^x__12>) ]
+
+// Edge client__21/recv_app_in__52 : rho__51 <- (); new c__4 = net
+rule recv_app_in__52[role="client__21"]
+  : [ State_client__21_0_3(%v, rho__51, x__12) ]
+    --[ Transition('client__21', 'index:0.3', %v) ]->
+    [ State_client__21_0_3_0_0(%v, '()', 'chan:net', x__12) ]
+
+// Edge client__21/case_in_return_c__152 : rho__53 <- (); new session_key_c__15 = dh_s__14^x__12; new dh_s__14; new resp__13 = v__5; drop c__4
+rule case_in_return_c__152[role="client__21"]
+  : [ !ACP('client__21', c__4, 'recv'),
+      State_client__21_0_3_0_0(%v, rho__53, c__4, x__12),
+      Store(c__4, v__5) ]
+    --[ Client_Est(),
+        Eq(v__5, <'str:RESP', dh_s__14>),
+        Transition('client__21', 'index:0.3_0.0', %v) ]->
+    [ State_client__21_0_5_0_3(%v, '()', dh_s__14^x__12, dh_s__14, v__5, x__12) ]
+
+// Edge client__21/event_let_exit_s__164 : rho__71 <- (); drop x__12; drop resp__13; drop dh_s__14; drop session_key_c__15
+rule event_let_exit_s__164[role="client__21"]
+  : [ State_client__21_0_5_0_3(%v, rho__71, session_key_c__15, dh_s__14, resp__13, x__12) ]
+    --[ Secret(session_key_c__15),
+        Transition('client__21', 'index:0.5_0.3', %v) ]->
+    [ State_client__21_0_8(%v, '()') ]
+
+// Attack edge client__21/tamper_channel_attack_in__42 : rho__41 <- (); new c__8 = net
+rule tamper_channel_attack_in__42[role="client__21"]
+  : [ State_client__21_0_3(%v, rho__41, x__12) ]
+    --[ Transition('client__21', 'index:0.3', %v) ]->
+    [ State_client__21_0_3_1_0(%v, '()', 'chan:net', x__12) ]
+
+// Edge client__21/case_in_return_c__160 : rho__43 <- (); new session_key_c__15 = dh_s__14^x__12; new dh_s__14; new resp__13 = w__10; drop c__8
+rule case_in_return_c__160[role="client__21"]
+  : [ !ACP('client__21', c__8, 'recv'),
+      In(w__10),
+      State_client__21_0_3_1_0(%v, rho__43, c__8, x__12),
+      Store(c__8, j__9) ]
+    --[ Client_Est(),
+        Eq(w__10, <'str:RESP', dh_s__14>),
+        Transition('client__21', 'index:0.3_1.0', %v) ]->
+    [ State_client__21_0_5_0_3(%v, '()', dh_s__14^x__12, dh_s__14, w__10, x__12) ]
+
+// Edge client__21/new_intro_send_a__140 : rho__25 <- (); new x__12
+rule new_intro_send_a__140[role="client__21"]
+  : [ !ACP('client__21', 'chan:net', 'send'),
+      Fr(x__12),
+      State_client__21_0_0(%v, rho__25) ]
+    --[ Transition('client__21', 'index:0.0', %v) ]->
+    [ State_client__21_0_3(%v, '()', x__12),
+      Store('chan:net', <'str:INIT', 'g'^x__12>) ]
+
+// Model of proc server__23
+
+// Edge server__23/recv_app_in__92 : rho__91 <- (); new c__4 = net
+rule recv_app_in__92[role="server__23"]
+  : [ State_server__23_0_0(%v, rho__91) ]
+    --[ Transition('server__23', 'index:0.0', %v) ]->
+    [ State_server__23_0_0_0_0(%v, '()', 'chan:net') ]
+
+// Edge server__23/case_in_return_c__172 : rho__93 <- (); new session_key_s__20 = dh_c__18^y__19; new y__19; new dh_c__18; new req__17 = v__5; drop c__4
+rule case_in_return_c__172[role="server__23"]
+  : [ !ACP('server__23', c__4, 'recv'),
+      Fr(y__19),
+      State_server__23_0_0_0_0(%v, rho__93, c__4),
+      Store(c__4, v__5) ]
+    --[ Eq(v__5, <'str:INIT', dh_c__18>),
+        Transition('server__23', 'index:0.0_0.0', %v) ]->
+    [ State_server__23_0_2_0_3(%v, '()', dh_c__18^y__19, y__19, dh_c__18, v__5) ]
+
+// Attack edge server__23/eaves_channel_at__186 : rho__111 <- ()
+rule eaves_channel_at__186[role="server__23"]
+  : [ !ACP('server__23', 'chan:net', 'send'),
+      State_server__23_0_2_0_3(%v, rho__111, session_key_s__20, y__19, dh_c__18, req__17) ]
+    --[ Transition('server__23', 'index:0.2_0.3', %v) ]->
+    [ Out(<'str:RESP','g'^y__19>),
+      State_server__23_0_2_0_5(%v, '()', session_key_s__20, y__19, dh_c__18, req__17),
+      Store('chan:net', <'str:RESP', 'g'^y__19>) ]
+
+// Edge server__23/event__126 : rho__125 <- ()
+rule event__126[role="server__23"]
+  : [ State_server__23_0_2_0_5(%v, rho__125, session_key_s__20, y__19, dh_c__18, req__17) ]
+    --[ Server_Est(),
+        Transition('server__23', 'index:0.2_0.5', %v) ]->
+    [ State_server__23_0_2_0_6(%v, '()', session_key_s__20, y__19, dh_c__18, req__17) ]
+
+// Edge server__23/event_let_exit_s__190 : rho__127 <- (); drop req__17; drop dh_c__18; drop y__19; drop session_key_s__20
+rule event_let_exit_s__190[role="server__23"]
+  : [ State_server__23_0_2_0_6(%v, rho__127, session_key_s__20, y__19, dh_c__18, req__17) ]
+    --[ Secret(session_key_s__20),
+        Transition('server__23', 'index:0.2_0.6', %v) ]->
+    [ State_server__23_0_4(%v, '()') ]
+
+// Edge server__23/send_app_in_put___183 : rho__117 <- ()
+rule send_app_in_put___183[role="server__23"]
+  : [ !ACP('server__23', 'chan:net', 'send'),
+      State_server__23_0_2_0_3(%v, rho__117, session_key_s__20, y__19, dh_c__18, req__17) ]
+    --[ Transition('server__23', 'index:0.2_0.3', %v) ]->
+    [ State_server__23_0_2_0_5(%v, '()', session_key_s__20, y__19, dh_c__18, req__17),
+      Store('chan:net', <'str:RESP', 'g'^y__19>) ]
+
+// Attack edge server__23/tamper_channel_attack_in__82 : rho__81 <- (); new c__8 = net
+rule tamper_channel_attack_in__82[role="server__23"]
+  : [ State_server__23_0_0(%v, rho__81) ]
+    --[ Transition('server__23', 'index:0.0', %v) ]->
+    [ State_server__23_0_0_1_0(%v, '()', 'chan:net') ]
+
+// Edge server__23/case_in_return_c__180 : rho__83 <- (); new session_key_s__20 = dh_c__18^y__19; new y__19; new dh_c__18; new req__17 = w__10; drop c__8
+rule case_in_return_c__180[role="server__23"]
+  : [ !ACP('server__23', c__8, 'recv'),
+      Fr(y__19),
+      In(w__10),
+      State_server__23_0_0_1_0(%v, rho__83, c__8),
+      Store(c__8, j__9) ]
+    --[ Eq(w__10, <'str:INIT', dh_c__18>),
+        Transition('server__23', 'index:0.0_1.0', %v) ]->
+    [ State_server__23_0_2_0_3(%v, '()', dh_c__18^y__19, y__19, dh_c__18, w__10) ]
+
+//// Midamble
+
+restriction Init : " All x #i #j . Init(x) @ #i & Init(x) @ #j ==> #i = #j "
+restriction Equality_rule: "All x y #i. Eq(x,y) @ #i ==> x = y"
+restriction NEquality_rule: "All x #i. NEq(x,x) @ #i ==> F"
+lemma AlwaysStarts[reuse,use_induction]:
+      "All x p #i. Loop_Back(x, p) @i ==> Ex #j. Loop_In(x, p) @j & j < i"
+
+lemma AlwaysStartsWhenEnds[reuse,use_induction]:
+      "All x p #i. Loop_Out(x, p) @i ==> Ex #j. Loop_In(x, p) @j & j < i"
+
+lemma TransitionOnce[reuse,use_induction]:
+      "All x p %i #j #k . Transition(x, p, %i) @#j & Transition(x, p, %i) @#k ==> #j = #k"
+
+//// Lemmas
+
+lemma Session_Est :
+  exists-trace
+    "Ex  #time_0 . Client_Est()@#time_0 "
+
+lemma Key_Secrecy :
+  all-traces "All k #i. Secret(k) @ i ==> not (Ex #j. K(k) @ j)"
+
+end
+

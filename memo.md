@@ -38,6 +38,18 @@ TCP通信を再現できない？
 - 秘密が漏れてしまっているとしたら、この時点で秘密鍵が漏れているせいだということを証明する
 - Reachableに使うものとSecretに使うものが（頭の中では）違っているので検証時にそれを分けられると良いのでは
 
+### 06/16
+- builtins の Diffie-Hellman を使ってみる（Tamarinを書き換える）
+- 昔の Diffie-Hellman を今の Tamarin で使ってみる
+- https://github.com/tamarin-prover/tamarin-prover/blob/master/examples/experiments/A-GDH2.spthy
+
+### 06/23
+- CAによる署名も加えたい
+- g^(xy)が漏れていたわけではないからverifiedされてしまっていた
+    + 切り分けミスと簡略化のしすぎ
+
+" 'g'^x "とか
+
 
 ## 覚えておくこと
 ``` eval opam env ```

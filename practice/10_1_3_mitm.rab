@@ -1,0 +1,66 @@
+function g:0
+function e:2
+equation e(e(g, x), y) = e(e(g, y), x)
+
+syscall send(c, v) {
+    put [c::store(v)]
+}
+syscall recv(c) {
+    case
+    | [c::store(v)] -> v
+    end
+}
+
+type node_t : process
+type chan_t : channel
+
+attack eaves_channel on send (c, v) {
+    put [c::store(v), ::Out(v)]
+}
+attack tamper_channel on recv (c) { 
+    case 
+    | [c::store(j), ::In(w)] -> w 
+    end 
+}
+
+allow attack node_t [eaves_channel, tamper_channel]
+allow node_t chan_t [send, recv]
+
+process client(ch : chan_t) : node_t 
+{
+    main {
+        new x in
+        _ := send(ch, e(g, x));
+        
+        var dh_s = recv(ch) in
+        
+        var session_key_c = e(dh_s, x) in
+        
+        event [::Client_Est()];
+        event [::Secret(session_key_c)]
+    }
+}
+
+process server(ch : chan_t) : node_t 
+{
+    main {
+        var dh_c = recv(ch) in
+        
+        new y in
+        _ := send(ch, e(g, y));
+        var session_key_s = e(dh_c, y) in
+        
+        event [::Server_Est()];
+        event [::Secret(session_key_s)]
+    }
+}
+
+channel net : chan_t
+system client(net) | server(net)
+
+requires
+[
+  lemma Session_Est_C : reachable ::Client_Est() ;
+  lemma Session_Est_S : reachable ::Server_Est() ;
+  lemma DH_Key_Secrecy : all-traces "All k #i. Secret(k) @ i ==> not (Ex #j. K(k) @ j)"
+]

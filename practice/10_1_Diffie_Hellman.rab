@@ -20,8 +20,10 @@ type chan_t : channel
 attack eaves_channel on send (c, v) {
     put [c::store(v), ::Out(v)]
 }
+attack tamper_channel on recv (c) { case | [c::store(j), ::In(w)] -> w end }
 
-allow attack node_t [eaves_channel]
+
+allow attack node_t [eaves_channel, tamper_channel]
 allow node_t chan_t [send, recv]
 
 process dh_test(ch : chan_t) : node_t 

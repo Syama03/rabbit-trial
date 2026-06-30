@@ -1,0 +1,64 @@
+(* Rabbitコンパイル用のダミーDH関数 *)
+function g:0
+function e:2
+(* equation に相当するものは後でtamarin側に書く *)
+
+syscall send(c, v) { put [c::store(v)] }
+syscall recv(c) { case | [c::store(v)] -> v end }
+
+type node_t : process
+type chan_t : channel
+
+(* 中間者攻撃の定義 *)
+attack eaves_channel on send (c, v) { put [c::store(v), ::Out(v)] }
+attack tamper_channel on recv (c) { case | [c::store(j), ::In(w)] -> w end }
+
+allow node_t chan_t [send, recv]
+allow attack node_t [tamper_channel, eaves_channel]
+
+process client(ch : chan_t) : node_t 
+{
+    main {
+        new x in
+        (* Client: e(g, x) を送信 *)
+        _ := send(ch, ("INIT", e(g, x)));
+        
+        var resp = recv(ch) in
+        case
+        | [resp = ("RESP", dh_s)] ->
+            (* Client: 受け取った dh_s と自身の x でセッション鍵を計算 *)
+            var session_key_c = e(dh_s, x) in
+            
+            event [::Client_Est()];
+            event [::Secret(session_key_c)]
+        end
+    }
+}
+
+process server(ch : chan_t) : node_t 
+{
+    main {
+        var req = recv(ch) in
+        case
+        | [req = ("INIT", dh_c)] ->
+            new y in
+            (* Server: 受け取った dh_c と自身の y でセッション鍵を計算 *)
+            var session_key_s = e(dh_c, y) in
+            
+            (* Server: e(g, y) を送信 *)
+            _ := send(ch, ("RESP", e(g, y)));
+            
+            event [::Server_Est()];
+            event [::Secret(session_key_s)]
+        end
+    }
+}
+
+channel net : chan_t
+system client(net) | server(net)
+
+requires
+[
+  lemma Session_Est : reachable ::Client_Est() ;
+  lemma Key_Secrecy : all-traces "All k #i. Secret(k) @ i ==> not (Ex #j. K(k) @ j)"
+]

@@ -19,8 +19,11 @@ attack eaves_channel on send (c, v) {
     put [c::store(v), ::Out(v)]
 }
 
+
+attack tamper_channel on recv (c) { case | [c::store(j), ::In(w)] -> w end }
+
 allow node_t chan_t [send, recv]
-allow attack node_t [eaves_channel]
+allow attack node_t [eaves_channel, tamper_channel]
 
 process enc_test(ch : chan_t) : node_t 
 {

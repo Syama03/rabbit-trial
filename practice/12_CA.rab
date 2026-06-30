@@ -1,0 +1,95 @@
+(* ミスあり->13に作り直し *)
+
+function g:0
+function e:2
+function pk:1        
+function sign:2      
+function verify:3    
+function success:0      
+
+syscall send(c, v) { put [c::store(v)] }
+syscall recv(c) { case | [c::store(v)] -> v end }
+
+type node_t : process
+type chan_t : channel
+type secure_chan_t : channel 
+
+attack eaves_channel on send (c, v) { put [c::store(v), ::Out(v)] }
+attack tamper_channel on recv (c) { case | [c::store(j), ::In(w)] -> w end }
+
+allow node_t chan_t [send, recv]
+allow node_t secure_chan_t [send, recv]
+allow attack node_t [tamper_channel, eaves_channel]
+
+
+process ca(auth_ch : secure_chan_t) : node_t
+{
+    main {
+        new sk_CA in 
+        new sk_S in
+        _ := send(auth_ch, ("TO_CLIENT", pk(sk_CA)));
+        _ := send(auth_ch, ("TO_SERVER", sk_S, sign(pk(sk_S), sk_CA)))
+    }
+}
+
+
+process client(ch : chan_t, auth_ch : secure_chan_t) : node_t 
+{
+    main {
+        var ca_init = recv(auth_ch) in
+        case
+        | [ca_init = ("TO_CLIENT", pk_CA)] ->
+            new x in
+            _ := send(ch, ("INIT", e(g, x)));
+            
+            var resp = recv(ch) in
+            case
+            | [resp = ("RESP", dh_s, pk_S, cert, signature)] ->
+                case
+                | [verify(cert, pk_S, pk_CA) = success] ->
+                    case
+                    | [verify(signature, dh_s, pk_S) = success] ->
+                        var session_key_c = e(dh_s, x) in
+                        
+                        event [::Client_Est()];
+                        event [::Secret(session_key_c)]
+                    end
+                end
+            end
+        end
+    }
+}
+
+
+process server(ch : chan_t, auth_ch : secure_chan_t) : node_t 
+{
+    main {
+        
+        var ca_init = recv(auth_ch) in
+        case
+        | [ca_init = ("TO_SERVER", sk_S, cert)] ->
+            var req = recv(ch) in
+            case
+            | [req = ("INIT", dh_c)] ->
+                new y in
+                var session_key_s = e(dh_c, y) in
+                _ := send(ch, ("RESP", e(g, y), pk(sk_S), cert, sign(e(g, y), sk_S)));
+                
+                event [::Server_Est()];
+                (* event [::Secret(session_key_s)] *)
+            end
+        end
+    }
+}
+
+channel net : chan_t
+channel auth_net : secure_chan_t
+
+system 
+  client(net, auth_net) | server(net, auth_net) | ca(auth_net)
+
+requires
+[
+  lemma Session_Est : reachable ::Client_Est() ;
+  lemma Key_Secrecy : all-traces "All k #i. Secret(k) @ i ==> not (Ex #j. K(k) @ j)"
+]

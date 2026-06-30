@@ -1,0 +1,315 @@
+theory rabbit
+begin
+builtins: natural-numbers
+
+//// Signature
+
+functions: g/0, e/2, pk/1, sign/2, verify/3, success/0
+
+//// Constants
+
+
+//// Proc group initialization
+
+// Proc group initialization PG_client__35
+rule Init_PG_client__35[role="PG_client__35"]
+  : [  ]
+    --[ Init(<'Proc_group', 'PG_client__35'>) ]->
+    [ !Inited_proc_group('PG_client__35'),
+      State_client__34_0_0(%1, '()') ]
+
+// Proc group initialization PG_server__37
+rule Init_PG_server__37[role="PG_server__37"]
+  : [  ]
+    --[ Init(<'Proc_group', 'PG_server__37'>) ]->
+    [ !Inited_proc_group('PG_server__37'),
+      State_server__36_0_0(%1, '()') ]
+
+// Proc group initialization PG_ca__39
+rule Init_PG_ca__39[role="PG_ca__39"]
+  : [  ]
+    --[ Init(<'Proc_group', 'PG_ca__39'>) ]->
+    [ !Inited_proc_group('PG_ca__39'),
+      State_ca__38_0_0(%1, '()') ]
+
+
+//// Access control
+
+// Access control for proc client__34 of group PG_client__35
+rule Access_client__34[role="client__34"]
+  : [ !Inited_proc_group('PG_client__35') ]
+    --[ Init(<'Proc_access', 'client__34'>) ]->
+    [ !ACP('client__34', 'chan:net', 'send'),
+      !ACP('client__34', 'chan:net', 'recv'),
+      !ACP('client__34', 'chan:auth_net', 'send'),
+      !ACP('client__34', 'chan:auth_net', 'recv') ]
+
+// Access control for proc server__36 of group PG_server__37
+rule Access_server__36[role="server__36"]
+  : [ !Inited_proc_group('PG_server__37') ]
+    --[ Init(<'Proc_access', 'server__36'>) ]->
+    [ !ACP('server__36', 'chan:net', 'send'),
+      !ACP('server__36', 'chan:net', 'recv'),
+      !ACP('server__36', 'chan:auth_net', 'send'),
+      !ACP('server__36', 'chan:auth_net', 'recv') ]
+
+// Access control for proc ca__38 of group PG_ca__39
+rule Access_ca__38[role="ca__38"]
+  : [ !Inited_proc_group('PG_ca__39') ]
+    --[ Init(<'Proc_access', 'ca__38'>) ]->
+    [ !ACP('ca__38', 'chan:auth_net', 'send'),
+      !ACP('ca__38', 'chan:auth_net', 'recv') ]
+
+//// Proc models
+
+// Model of proc client__34
+
+// Edge client__34/recv_app_in__51 : rho__50 <- (); new c__4 = auth_net
+rule recv_app_in__51[role="client__34"]
+  : [ State_client__34_0_0(%v, rho__50) ]
+    --[ Transition('client__34', 'index:0.0', %v) ]->
+    [ State_client__34_0_0_0_0(%v, '()', 'chan:auth_net') ]
+
+// Edge client__34/case_in_return_c__255 : rho__52 <- (); new x__18; new pk_CA__17; new ca_init__16 = v__5; drop c__4
+rule case_in_return_c__255[role="client__34"]
+  : [ !ACP('client__34', c__4, 'recv'),
+      Fr(x__18),
+      State_client__34_0_0_0_0(%v, rho__52, c__4),
+      Store(c__4, v__5) ]
+    --[ Eq(v__5, <'str:TO_CLIENT', pk_CA__17>),
+        Transition('client__34', 'index:0.0_0.0', %v) ]->
+    [ State_client__34_0_2_0_1(%v, '()', x__18, pk_CA__17, v__5) ]
+
+// Attack edge client__34/eaves_channel_at__267 : rho__66 <- ()
+rule eaves_channel_at__267[role="client__34"]
+  : [ !ACP('client__34', 'chan:net', 'send'),
+      State_client__34_0_2_0_1(%v, rho__66, x__18, pk_CA__17, ca_init__16) ]
+    --[ Transition('client__34', 'index:0.2_0.1', %v) ]->
+    [ Out(<'str:INIT', e(g(), x__18)>),
+      State_client__34_0_2_0_3(%v, '()', x__18, pk_CA__17, ca_init__16),
+      Store('chan:net', <'str:INIT', e(g(), x__18)>) ]
+
+// Edge client__34/recv_app_in__91 : rho__90 <- (); new c__4 = net
+rule recv_app_in__91[role="client__34"]
+  : [ State_client__34_0_2_0_3(%v, rho__90, x__18, pk_CA__17, ca_init__16) ]
+    --[ Transition('client__34', 'index:0.2_0.3', %v) ]->
+    [ State_client__34_0_2_0_3_0_0(%v, '()', 'chan:net', x__18, pk_CA__17, ca_init__16) ]
+
+// Edge client__34/case_in_return_c__277 : rho__92 <- (); new session_key_c__24 = e(dh_s__21, x__18); new signature__23; new pk_S__22; new dh_s__21; new cert__20; new resp__19 = v__5; drop c__4
+rule case_in_return_c__277[role="client__34"]
+  : [ !ACP('client__34', c__4, 'recv'),
+      State_client__34_0_2_0_3_0_0(%v, rho__92, c__4, x__18, pk_CA__17, ca_init__16),
+      Store(c__4, v__5) ]
+    --[ Client_Est(),
+        Eq(v__5, <'str:RESP', dh_s__21, pk_S__22, cert__20, signature__23>),
+        Eq(verify(cert__20, pk_S__22, pk_CA__17), success()),
+        Eq(verify(signature__23, dh_s__21, pk_S__22), success()),
+        Transition('client__34', 'index:0.2_0.3_0.0', %v) ]->
+    [ State_client__34_0_2_0_5_0_0_0_0_0_3(%v, '()', e(dh_s__21, x__18), signature__23, pk_S__22, dh_s__21, cert__20, v__5, x__18, pk_CA__17, ca_init__16) ]
+
+// Edge client__34/event_let_exit_s__295 : rho__114 <- (); drop ca_init__16; drop pk_CA__17; drop x__18; drop resp__19; drop signature__23; drop pk_S__22; drop dh_s__21; drop cert__20; drop session_key_c__24
+rule event_let_exit_s__295[role="client__34"]
+  : [ State_client__34_0_2_0_5_0_0_0_0_0_3(%v, rho__114, session_key_c__24, signature__23, pk_S__22, dh_s__21, cert__20, resp__19, x__18, pk_CA__17, ca_init__16) ]
+    --[ Secret(session_key_c__24),
+        Transition('client__34', 'index:0.2_0.5_0.0_0.0_0.3', %v) ]->
+    [ State_client__34_0_4(%v, '()') ]
+
+// Attack edge client__34/tamper_channel_attack_in__81 : rho__80 <- (); new c__8 = net
+rule tamper_channel_attack_in__81[role="client__34"]
+  : [ State_client__34_0_2_0_3(%v, rho__80, x__18, pk_CA__17, ca_init__16) ]
+    --[ Transition('client__34', 'index:0.2_0.3', %v) ]->
+    [ State_client__34_0_2_0_3_1_0(%v, '()', 'chan:net', x__18, pk_CA__17, ca_init__16) ]
+
+// Edge client__34/case_in_return_c__287 : rho__82 <- (); new session_key_c__24 = e(dh_s__21, x__18); new signature__23; new pk_S__22; new dh_s__21; new cert__20; new resp__19 = w__10; drop c__8
+rule case_in_return_c__287[role="client__34"]
+  : [ !ACP('client__34', c__8, 'recv'),
+      In(w__10),
+      State_client__34_0_2_0_3_1_0(%v, rho__82, c__8, x__18, pk_CA__17, ca_init__16),
+      Store(c__8, j__9) ]
+    --[ Client_Est(),
+        Eq(w__10, <'str:RESP', dh_s__21, pk_S__22, cert__20, signature__23>),
+        Eq(verify(cert__20, pk_S__22, pk_CA__17), success()),
+        Eq(verify(signature__23, dh_s__21, pk_S__22), success()),
+        Transition('client__34', 'index:0.2_0.3_1.0', %v) ]->
+    [ State_client__34_0_2_0_5_0_0_0_0_0_3(%v, '()', e(dh_s__21, x__18), signature__23, pk_S__22, dh_s__21, cert__20, w__10, x__18, pk_CA__17, ca_init__16) ]
+
+// Edge client__34/send_app_in_put___264 : rho__72 <- ()
+rule send_app_in_put___264[role="client__34"]
+  : [ !ACP('client__34', 'chan:net', 'send'),
+      State_client__34_0_2_0_1(%v, rho__72, x__18, pk_CA__17, ca_init__16) ]
+    --[ Transition('client__34', 'index:0.2_0.1', %v) ]->
+    [ State_client__34_0_2_0_3(%v, '()', x__18, pk_CA__17, ca_init__16),
+      Store('chan:net', <'str:INIT', e(g(), x__18)>) ]
+
+// Attack edge client__34/tamper_channel_attack_in__41 : rho__40 <- (); new c__8 = auth_net
+rule tamper_channel_attack_in__41[role="client__34"]
+  : [ State_client__34_0_0(%v, rho__40) ]
+    --[ Transition('client__34', 'index:0.0', %v) ]->
+    [ State_client__34_0_0_1_0(%v, '()', 'chan:auth_net') ]
+
+// Edge client__34/case_in_return_c__261 : rho__42 <- (); new x__18; new pk_CA__17; new ca_init__16 = w__10; drop c__8
+rule case_in_return_c__261[role="client__34"]
+  : [ !ACP('client__34', c__8, 'recv'),
+      Fr(x__18),
+      In(w__10),
+      State_client__34_0_0_1_0(%v, rho__42, c__8),
+      Store(c__8, j__9) ]
+    --[ Eq(w__10, <'str:TO_CLIENT', pk_CA__17>),
+        Transition('client__34', 'index:0.0_1.0', %v) ]->
+    [ State_client__34_0_2_0_1(%v, '()', x__18, pk_CA__17, w__10) ]
+
+// Model of proc server__36
+
+// Edge server__36/recv_app_in__143 : rho__142 <- (); new c__4 = auth_net
+rule recv_app_in__143[role="server__36"]
+  : [ State_server__36_0_0(%v, rho__142) ]
+    --[ Transition('server__36', 'index:0.0', %v) ]->
+    [ State_server__36_0_0_0_0(%v, '()', 'chan:auth_net') ]
+
+// Edge server__36/case_in_return_c__300 : rho__144 <- (); new sk_S__29; new cert__28; new ca_init__27 = v__5; drop c__4
+rule case_in_return_c__300[role="server__36"]
+  : [ !ACP('server__36', c__4, 'recv'),
+      State_server__36_0_0_0_0(%v, rho__144, c__4),
+      Store(c__4, v__5) ]
+    --[ Eq(v__5, <'str:TO_SERVER', sk_S__29, cert__28>),
+        Transition('server__36', 'index:0.0_0.0', %v) ]->
+    [ State_server__36_0_2_0_0(%v, '()', sk_S__29, cert__28, v__5) ]
+
+// Edge server__36/recv_app_in__167 : rho__166 <- (); new c__4 = net
+rule recv_app_in__167[role="server__36"]
+  : [ State_server__36_0_2_0_0(%v, rho__166, sk_S__29, cert__28, ca_init__27) ]
+    --[ Transition('server__36', 'index:0.2_0.0', %v) ]->
+    [ State_server__36_0_2_0_0_0_0(%v, '()', 'chan:net', sk_S__29, cert__28, ca_init__27) ]
+
+// Edge server__36/case_in_return_c__313 : rho__168 <- (); new session_key_s__33 = e(dh_c__31, y__32); new y__32; new dh_c__31; new req__30 = v__5; drop c__4
+rule case_in_return_c__313[role="server__36"]
+  : [ !ACP('server__36', c__4, 'recv'),
+      Fr(y__32),
+      State_server__36_0_2_0_0_0_0(%v, rho__168, c__4, sk_S__29, cert__28, ca_init__27),
+      Store(c__4, v__5) ]
+    --[ Eq(v__5, <'str:INIT', dh_c__31>),
+        Transition('server__36', 'index:0.2_0.0_0.0', %v) ]->
+    [ State_server__36_0_2_0_2_0_3(%v, '()', e(dh_c__31, y__32), y__32, dh_c__31, v__5, sk_S__29, cert__28, ca_init__27) ]
+
+// Attack edge server__36/eaves_channel_at__327 : rho__186 <- ()
+rule eaves_channel_at__327[role="server__36"]
+  : [ !ACP('server__36', 'chan:net', 'send'),
+      State_server__36_0_2_0_2_0_3(%v, rho__186, session_key_s__33, y__32, dh_c__31, req__30, sk_S__29, cert__28, ca_init__27) ]
+    --[ Transition('server__36', 'index:0.2_0.2_0.3', %v) ]->
+    [ Out(<'str:RESP', e(g(), y__32), pk(sk_S__29), cert__28, sign(e(g(), y__32), sk_S__29)>),
+      State_server__36_0_2_0_2_0_5(%v, '()', session_key_s__33, y__32, dh_c__31, req__30, sk_S__29, cert__28, ca_init__27),
+      Store('chan:net', <'str:RESP', e(g(), y__32), pk(sk_S__29), cert__28, sign(e(g(), y__32), sk_S__29)>) ]
+
+// Edge server__36/event_let_exit_s__333 : rho__200 <- (); drop ca_init__27; drop sk_S__29; drop cert__28; drop req__30; drop dh_c__31; drop y__32; drop session_key_s__33
+rule event_let_exit_s__333[role="server__36"]
+  : [ State_server__36_0_2_0_2_0_5(%v, rho__200, session_key_s__33, y__32, dh_c__31, req__30, sk_S__29, cert__28, ca_init__27) ]
+    --[ Server_Est(),
+        Transition('server__36', 'index:0.2_0.2_0.5', %v) ]->
+    [ State_server__36_0_4(%v, '()') ]
+
+// Edge server__36/send_app_in_put___324 : rho__192 <- ()
+rule send_app_in_put___324[role="server__36"]
+  : [ !ACP('server__36', 'chan:net', 'send'),
+      State_server__36_0_2_0_2_0_3(%v, rho__192, session_key_s__33, y__32, dh_c__31, req__30, sk_S__29, cert__28, ca_init__27) ]
+    --[ Transition('server__36', 'index:0.2_0.2_0.3', %v) ]->
+    [ State_server__36_0_2_0_2_0_5(%v, '()', session_key_s__33, y__32, dh_c__31, req__30, sk_S__29, cert__28, ca_init__27),
+      Store('chan:net', <'str:RESP', e(g(), y__32), pk(sk_S__29), cert__28, sign(e(g(), y__32), sk_S__29)>) ]
+
+// Attack edge server__36/tamper_channel_attack_in__157 : rho__156 <- (); new c__8 = net
+rule tamper_channel_attack_in__157[role="server__36"]
+  : [ State_server__36_0_2_0_0(%v, rho__156, sk_S__29, cert__28, ca_init__27) ]
+    --[ Transition('server__36', 'index:0.2_0.0', %v) ]->
+    [ State_server__36_0_2_0_0_1_0(%v, '()', 'chan:net', sk_S__29, cert__28, ca_init__27) ]
+
+// Edge server__36/case_in_return_c__321 : rho__158 <- (); new session_key_s__33 = e(dh_c__31, y__32); new y__32; new dh_c__31; new req__30 = w__10; drop c__8
+rule case_in_return_c__321[role="server__36"]
+  : [ !ACP('server__36', c__8, 'recv'),
+      Fr(y__32),
+      In(w__10),
+      State_server__36_0_2_0_0_1_0(%v, rho__158, c__8, sk_S__29, cert__28, ca_init__27),
+      Store(c__8, j__9) ]
+    --[ Eq(w__10, <'str:INIT', dh_c__31>),
+        Transition('server__36', 'index:0.2_0.0_1.0', %v) ]->
+    [ State_server__36_0_2_0_2_0_3(%v, '()', e(dh_c__31, y__32), y__32, dh_c__31, w__10, sk_S__29, cert__28, ca_init__27) ]
+
+// Attack edge server__36/tamper_channel_attack_in__133 : rho__132 <- (); new c__8 = auth_net
+rule tamper_channel_attack_in__133[role="server__36"]
+  : [ State_server__36_0_0(%v, rho__132) ]
+    --[ Transition('server__36', 'index:0.0', %v) ]->
+    [ State_server__36_0_0_1_0(%v, '()', 'chan:auth_net') ]
+
+// Edge server__36/case_in_return_c__305 : rho__134 <- (); new sk_S__29; new cert__28; new ca_init__27 = w__10; drop c__8
+rule case_in_return_c__305[role="server__36"]
+  : [ !ACP('server__36', c__8, 'recv'),
+      In(w__10),
+      State_server__36_0_0_1_0(%v, rho__134, c__8),
+      Store(c__8, j__9) ]
+    --[ Eq(w__10, <'str:TO_SERVER', sk_S__29, cert__28>),
+        Transition('server__36', 'index:0.0_1.0', %v) ]->
+    [ State_server__36_0_2_0_0(%v, '()', sk_S__29, cert__28, w__10) ]
+
+// Model of proc ca__38
+
+// Attack edge ca__38/new_intro_new_in__342 : rho__214 <- (); new sk_S__13; new sk_CA__12
+rule new_intro_new_in__342[role="ca__38"]
+  : [ !ACP('ca__38', 'chan:auth_net', 'send'),
+      Fr(sk_CA__12),
+      Fr(sk_S__13),
+      State_ca__38_0_0(%v, rho__214) ]
+    --[ Transition('ca__38', 'index:0.0', %v) ]->
+    [ Out(<'str:TO_CLIENT', pk(sk_CA__12)>),
+      State_ca__38_0_4(%v, '()', sk_S__13, sk_CA__12),
+      Store('chan:auth_net', <'str:TO_CLIENT', pk(sk_CA__12)>) ]
+
+// Attack edge ca__38/eaves_channel_at__352 : rho__232 <- (); drop sk_CA__12; drop sk_S__13
+rule eaves_channel_at__352[role="ca__38"]
+  : [ !ACP('ca__38', 'chan:auth_net', 'send'),
+      State_ca__38_0_4(%v, rho__232, sk_S__13, sk_CA__12) ]
+    --[ Transition('ca__38', 'index:0.4', %v) ]->
+    [ Out(<'str:TO_SERVER', sk_S__13, sign(pk(sk_S__13), sk_CA__12)>),
+      State_ca__38_0_8(%v, '()'),
+      Store('chan:auth_net', <'str:TO_SERVER', sk_S__13, sign(pk(sk_S__13), sk_CA__12)>) ]
+
+// Edge ca__38/send_app_in_put___347 : rho__238 <- (); drop sk_CA__12; drop sk_S__13
+rule send_app_in_put___347[role="ca__38"]
+  : [ !ACP('ca__38', 'chan:auth_net', 'send'),
+      State_ca__38_0_4(%v, rho__238, sk_S__13, sk_CA__12) ]
+    --[ Transition('ca__38', 'index:0.4', %v) ]->
+    [ State_ca__38_0_8(%v, '()'),
+      Store('chan:auth_net', <'str:TO_SERVER', sk_S__13, sign(pk(sk_S__13), sk_CA__12)>) ]
+
+// Edge ca__38/new_intro_new_in__338 : rho__214 <- (); new sk_S__13; new sk_CA__12
+rule new_intro_new_in__338[role="ca__38"]
+  : [ !ACP('ca__38', 'chan:auth_net', 'send'),
+      Fr(sk_CA__12),
+      Fr(sk_S__13),
+      State_ca__38_0_0(%v, rho__214) ]
+    --[ Transition('ca__38', 'index:0.0', %v) ]->
+    [ State_ca__38_0_4(%v, '()', sk_S__13, sk_CA__12),
+      Store('chan:auth_net', <'str:TO_CLIENT', pk(sk_CA__12)>) ]
+
+//// Midamble
+
+restriction Init : " All x #i #j . Init(x) @ #i & Init(x) @ #j ==> #i = #j "
+restriction Equality_rule: "All x y #i. Eq(x,y) @ #i ==> x = y"
+restriction NEquality_rule: "All x #i. NEq(x,x) @ #i ==> F"
+lemma AlwaysStarts[reuse,use_induction]:
+      "All x p #i. Loop_Back(x, p) @i ==> Ex #j. Loop_In(x, p) @j & j < i"
+
+lemma AlwaysStartsWhenEnds[reuse,use_induction]:
+      "All x p #i. Loop_Out(x, p) @i ==> Ex #j. Loop_In(x, p) @j & j < i"
+
+lemma TransitionOnce[reuse,use_induction]:
+      "All x p %i #j #k . Transition(x, p, %i) @#j & Transition(x, p, %i) @#k ==> #j = #k"
+
+//// Lemmas
+
+lemma Session_Est :
+  exists-trace
+    "Ex  #time_0 . Client_Est()@#time_0 "
+
+lemma Key_Secrecy :
+  all-traces "All k #i. Secret(k) @ i ==> not (Ex #j. K(k) @ j)"
+
+end
+

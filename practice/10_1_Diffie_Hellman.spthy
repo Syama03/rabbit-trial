@@ -1,56 +1,79 @@
 theory rabbit
 begin
-builtins: natural-numbers
+builtins: natural-numbers, diffie-hellman
 
 //// Signature
-
-functions: g/0, e/2
-equations: e(e(g(), x__2), y__3)=e(e(g(), y__3), x__2)
 
 //// Constants
 
 
 //// Proc group initialization
 
-// Proc group initialization PG_dh_test__13
-rule Init_PG_dh_test__13[role="PG_dh_test__13"]
+// Proc group initialization PG_dh_test__18
+rule Init_PG_dh_test__18[role="PG_dh_test__18"]
   : [  ]
-    --[ Init(<'Proc_group', 'PG_dh_test__13'>) ]->
-    [ !Inited_proc_group('PG_dh_test__13'),
-      State_dh_test__12_0_0(%1, '()') ]
+    --[ Init(<'Proc_group', 'PG_dh_test__18'>) ]->
+    [ !Inited_proc_group('PG_dh_test__18'),
+      State_dh_test__17_0_0(%1, '()') ]
 
 
 //// Access control
 
-// Access control for proc dh_test__12 of group PG_dh_test__13
-rule Access_dh_test__12[role="dh_test__12"]
-  : [ !Inited_proc_group('PG_dh_test__13') ]
-    --[ Init(<'Proc_access', 'dh_test__12'>) ]->
-    [ !ACP('dh_test__12', 'chan:net', 'send'),
-      !ACP('dh_test__12', 'chan:net', 'recv') ]
+// Access control for proc dh_test__17 of group PG_dh_test__18
+rule Access_dh_test__17[role="dh_test__17"]
+  : [ !Inited_proc_group('PG_dh_test__18') ]
+    --[ Init(<'Proc_access', 'dh_test__17'>) ]->
+    [ !ACP('dh_test__17', 'chan:net', 'send'),
+      !ACP('dh_test__17', 'chan:net', 'recv') ]
 
 //// Proc models
 
-// Model of proc dh_test__12
+// Model of proc dh_test__17
 
-// Edge dh_test__12/new_intro_new_in__56 : rho__14 <- (); new session_key__11 = e(e(g, x__9), y__10); new y__10; new x__9
-rule new_intro_new_in__56[role="dh_test__12"]
-  : [ !ACP('dh_test__12', 'chan:net', 'send'),
-      !ACP('dh_test__12', 'chan:net', 'send'),
-      Fr(x__9),
-      Fr(y__10),
-      State_dh_test__12_0_0(%v, rho__14) ]
-    --[ Transition('dh_test__12', 'index:0.0', %v) ]->
-    [ State_dh_test__12_0_8(%v, '()', e(e(g(), x__9), y__10), y__10, x__9),
-      Store('chan:net', e(g(), x__9)),
-      Store('chan:net', e(g(), y__10)) ]
+// Attack edge dh_test__17/new_intro_new_in__71 : rho__19 <- (); new y__15; new x__14
+rule new_intro_new_in__71[role="dh_test__17"]
+  : [ !ACP('dh_test__17', 'chan:net', 'send'),
+      Fr(x__14),
+      Fr(y__15),
+      State_dh_test__17_0_0(%v, rho__19) ]
+    --[ Transition('dh_test__17', 'index:0.0', %v) ]->
+    [ Out('g'^x__14),
+      State_dh_test__17_0_4(%v, '()', y__15, x__14),
+      Store('chan:net', 'g'^x__14) ]
 
-// Edge dh_test__12/event_let_exit_s__59 : rho__38 <- (); drop x__9; drop y__10; drop session_key__11
-rule event_let_exit_s__59[role="dh_test__12"]
-  : [ State_dh_test__12_0_8(%v, rho__38, session_key__11, y__10, x__9) ]
-    --[ Secret(session_key__11),
-        Transition('dh_test__12', 'index:0.8', %v) ]->
-    [ State_dh_test__12_0_12(%v, '()') ]
+// Attack edge dh_test__17/eaves_channel_at__81 : rho__37 <- (); new session_key__16 = 'g'^x__14^y__15
+rule eaves_channel_at__81[role="dh_test__17"]
+  : [ !ACP('dh_test__17', 'chan:net', 'send'),
+      State_dh_test__17_0_4(%v, rho__37, y__15, x__14) ]
+    --[ Transition('dh_test__17', 'index:0.4', %v) ]->
+    [ Out('g'^y__15),
+      State_dh_test__17_0_8(%v, '()', 'g'^x__14^y__15, y__15, x__14),
+      Store('chan:net', 'g'^y__15) ]
+
+// Edge dh_test__17/event_let_exit_s__84 : rho__55 <- (); drop x__14; drop y__15; drop session_key__16
+rule event_let_exit_s__84[role="dh_test__17"]
+  : [ State_dh_test__17_0_8(%v, rho__55, session_key__16, y__15, x__14) ]
+    --[ Secret(session_key__16),
+        Transition('dh_test__17', 'index:0.8', %v) ]->
+    [ State_dh_test__17_0_12(%v, '()') ]
+
+// Edge dh_test__17/send_app_in_put___76 : rho__43 <- (); new session_key__16 = e(e(g, x__14), y__15)
+rule send_app_in_put___76[role="dh_test__17"]
+  : [ !ACP('dh_test__17', 'chan:net', 'send'),
+      State_dh_test__17_0_4(%v, rho__43, y__15, x__14) ]
+    --[ Transition('dh_test__17', 'index:0.4', %v) ]->
+    [ State_dh_test__17_0_8(%v, '()', 'g'^x__14^ y__15, y__15, x__14),
+      Store('chan:net', 'g'^y__15) ]
+
+// Edge dh_test__17/new_intro_new_in__67 : rho__19 <- (); new y__15; new x__14
+rule new_intro_new_in__67[role="dh_test__17"]
+  : [ !ACP('dh_test__17', 'chan:net', 'send'),
+      Fr(x__14),
+      Fr(y__15),
+      State_dh_test__17_0_0(%v, rho__19) ]
+    --[ Transition('dh_test__17', 'index:0.0', %v) ]->
+    [ State_dh_test__17_0_4(%v, '()', y__15, x__14),
+      Store('chan:net', 'g'^x__14) ]
 
 //// Midamble
 
